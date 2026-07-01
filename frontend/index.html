@@ -1,44 +1,13 @@
 <!doctype html>
-<!--
-  Stage 0 placeholder page. Stage 6 replaces this whole directory with a real
-  Vite + React + TypeScript app. The Cuaderno palette below is a teaser of the
-  visual direction locked in from reference/Presupuesto.tsx.
--->
 <html lang="es">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#FBF7F0" />
     <title>Saldo</title>
-    <style>
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: #fbf7f0;
-        background-image: radial-gradient(#e7e0d4 0.5px, transparent 0.5px);
-        background-size: 22px 22px;
-        color: #1c2826;
-        font-family: Georgia, "Times New Roman", serif;
-      }
-      .card {
-        text-align: center;
-        background: #fff;
-        border: 1px solid #e7e0d4;
-        border-radius: 22px;
-        padding: 40px 48px;
-      }
-      h1 { margin: 0 0 6px; font-size: 40px; }
-      .dot { color: #e06b52; }
-      p { margin: 0; color: #5c6a66; }
-      .mint { color: #2f8f6f; font-weight: 600; }
-    </style>
   </head>
   <body>
-    <div class="card">
-      <h1>Saldo<span class="dot">.</span></h1>
-      <p>Offline-first, self-hosted personal finance.</p>
-      <p class="mint">Stage 0 · scaffolding</p>
-    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

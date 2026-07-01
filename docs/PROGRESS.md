@@ -10,6 +10,53 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 6 — Frontend foundation
+
+**Built**
+- Real Vite + React + TS app replacing the Stage-0 placeholder: `vite.config.ts`
+  (with vitest/jsdom), `index.html` entry, `src/main.tsx` bootstrapping
+  QueryClientProvider + BrowserRouter and opening Dexie on load.
+- **Tailwind** with the **Cuaderno palette** as theme tokens (`tailwind.config.js`:
+  paper/ink/mint/coral/gold/etc.), `index.css` with the dotted-paper backdrop and
+  `btn-primary`/`field-input`/`card-panel` component classes.
+- **Dexie** schema (`src/db/db.ts`) mirroring the backend: `categories`,
+  `entries`, `profile` (User mirror), `meta` (sync bookkeeping). `deleted` stored
+  as 0/1 (Dexie can't index booleans).
+- **Zustand** auth store (`authStore.ts`) persisted to localStorage → session
+  survives reload.
+- **TanStack Query** client with offline-friendly defaults (no refetch-on-focus,
+  polite retries).
+- API client (`shared/api/client.ts`) — base URL from `VITE_API_BASE_URL`
+  (default `/api`), auto-attaches the JWT, throws typed `ApiError`.
+- Identity: `api.ts` (register/login/fetchMe, mirrors profile into Dexie),
+  `hooks.ts` (useLogin/useRegister/useLogout), `LoginPage`/`RegisterPage`
+  (Cuaderno-styled, Spanish), `ProtectedRoute`, placeholder authed `HomePage`.
+- Multi-stage frontend Dockerfile (node build → nginx serve `dist`).
+- Tests (vitest + React Testing Library): auth store (set/clear/persist),
+  Dexie schema shape, `formatMoney`/`parseAmount`, LoginPage render.
+
+**Deviations from the plan**
+- Removed the `lint` npm script for now (no ESLint config yet) so CI's
+  `--if-present` lint step stays green; ESLint is a Stage 11 polish item.
+  Typecheck (`tsc --noEmit`) + vitest cover the frontend meanwhile.
+- Added a `profile` Dexie table to mirror the User shape (the plan said
+  "Entry/Category/User"); the live session also lives in the persisted auth store.
+
+**Verification**
+- `npm run typecheck` → clean; `npm test` → 34 passed (incl. the Stage-3 domain
+  tests now under jsdom); `npm run build` → production bundle built, Tailwind
+  compiled.
+- Full browser register/login round-trip needs the backend running and a real
+  browser; wired end-to-end (identity API + store + Dexie) and covered by unit
+  tests, but the manual click-through is deferred to a host with Docker/browser
+  (same environment limits noted in Stage 0).
+
+**Open**
+- Port the budgeting UI (Dashboard/MonthView/YearView, category CRUD) onto this
+  shell → Stage 7.
+
+---
+
 ## Stage 5 — Backend sync & multi-currency
 
 **Built**
