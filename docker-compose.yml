@@ -35,7 +35,10 @@ services:
     build: ./frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        # Wait for the backend healthcheck so nginx's first upstream lookup
+        # succeeds instead of crash-looping on "host not found in upstream".
+        condition: service_healthy
     ports:
       - "8080:80"
 
