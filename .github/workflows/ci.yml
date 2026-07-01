@@ -53,14 +53,13 @@ jobs:
           node-version: "22"
 
       - name: Install dependencies
-        # Stage 0 has no package.json yet; skip cleanly until Stage 6.
-        run: |
-          if [ -f package.json ]; then npm ci; else echo "no package.json yet (Stage 0)"; fi
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck --if-present
 
       - name: Lint
-        run: |
-          if [ -f package.json ]; then npm run lint --if-present; else echo "skip"; fi
+        run: npm run lint --if-present
 
       - name: Test (vitest)
-        run: |
-          if [ -f package.json ]; then npm test --if-present; else echo "skip"; fi
+        run: npm test --if-present

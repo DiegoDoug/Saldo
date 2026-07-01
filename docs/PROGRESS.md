@@ -10,6 +10,52 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 3 — Domain core (the compute logic)
+
+**Built**
+- **Backend** `app/shared/domain/`:
+  - `rounding.py` — `round2` reproducing JS `Math.round` half-up semantics
+    (deliberately *not* Python's banker's `round()`), so both language cores
+    agree to the cent.
+  - `budgeting.py` — framework-free `compute_month`/`compute_year` with
+    `MonthInput`/`MonthResult`/`YearResult` dataclasses, ported verbatim from
+    the prototype (including which sub-totals round and which don't).
+  - `money.py` — `Money` value object: ISO-4217 validation, cent rounding,
+    same-currency add/subtract/compare, explicit `convert(rate, to)`;
+    cross-currency arithmetic raises `CurrencyMismatchError`.
+- **Frontend** `src/shared/domain/` — `rounding.ts`, `budgeting.ts`, `money.ts`
+  mirroring the Python API exactly. Minimal `package.json` + `tsconfig.json` so
+  vitest/tsc run now (the full Vite app is Stage 6).
+- **Tests** — backend `test_budgeting_domain.py` (12) + `test_money.py` (9);
+  frontend `budgeting.test.ts` (11) + `money.test.ts` (10). The budgeting cases
+  are mirrored case-for-case with identical expected numbers across languages —
+  that shared table is the cross-language contract. Edge cases covered: zero
+  income (never overspent), overspend, negative goal, goal-boundary, and
+  half-up rounding vs banker's.
+
+**Deviations from the plan**
+- The compute core operates on plain numeric amounts within a single currency
+  rather than on `Money`. Rationale: the prototype's formulas are single-
+  currency arithmetic; `Money` guards the one place currency actually matters
+  (cross-currency combination), which happens at the boundary in Stage 5. This
+  keeps the hot compute path allocation-free and the two cores byte-identical.
+- `byCategory` year aggregation from the prototype is intentionally left out of
+  the pure core — it depends on dynamic category identity, which belongs to the
+  storage/UI layers (Stages 4/7), not the arithmetic core.
+- Introduced minimal frontend tooling now (Stage 6 owns the real Vite scaffold)
+  because the domain core is framework-free and only needs vitest + tsc. CI's
+  frontend job now runs typecheck + vitest.
+
+**Verification**
+- Backend: `pytest` → 28 passed; `ruff check .` → clean.
+- Frontend: `npm run typecheck` → clean; `npm test` → 21 passed.
+- Parity: the shared expected-value tables match on both sides.
+
+**Open**
+- Map Entry/Category rows → `MonthInput` at the API boundary → Stage 4.
+
+---
+
 ## Stage 2 — Identity module
 
 **Built**

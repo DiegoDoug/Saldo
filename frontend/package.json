@@ -1,0 +1,16 @@
+{
+  "name": "saldo-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Saldo frontend — offline-first personal finance (React + Vite + TS).",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
