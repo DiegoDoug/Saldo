@@ -1,0 +1,22 @@
+# Saldo backend dependencies. Pinned to keep the Raspberry Pi build reproducible.
+
+# Web framework + server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# ORM + migrations
+sqlmodel==0.0.22
+alembic==1.14.0
+
+# Settings (env-based config)
+pydantic-settings==2.7.1
+
+# Auth (Stage 2): fastapi-users with SQLModel/SQLAlchemy + argon2 hashing
+fastapi-users[sqlalchemy]==14.0.1
+argon2-cffi==23.1.0
+
+# Async SQLite driver (fastapi-users is async)
+aiosqlite==0.20.0
+
+# HTTP client for Frankfurter FX rates (Stage 5)
+httpx==0.28.1

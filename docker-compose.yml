@@ -1,0 +1,64 @@
+# ============================================================
+# Saldo — Docker Compose
+#
+# Three services, one command: `docker compose up`.
+#   - frontend    nginx serving the built bundle, proxies /api -> backend
+#   - backend     uvicorn running FastAPI
+#   - cloudflared the Cloudflare Tunnel (sole public ingress on a real deploy)
+#
+# A named volume (saldo-data) holds the SQLite file so it survives rebuilds.
+# Copy .env.example to .env before running.
+# ============================================================
+
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Keep the DB on the mounted volume regardless of what .env says locally.
+      SALDO_DATABASE_URL: sqlite:///./data/saldo.db
+    volumes:
+      - saldo-data:/app/data
+    ports:
+      # Exposed for local dev / debugging. Behind Cloudflare Tunnel in prod the
+      # tunnel reaches it over the compose network, so this can be removed.
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # With a token set, run the tunnel. With no token (local dev), idle instead
+    # of crash-looping so `docker compose up` stays green. The cloudflared image
+    # is Debian-based and ships /bin/sh, so this wrapper is safe.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        if [ -n "$$TUNNEL_TOKEN" ]; then
+          exec cloudflared tunnel --no-autoupdate run;
+        else
+          echo "No CLOUDFLARE_TUNNEL_TOKEN set; cloudflared idling (local dev).";
+          exec sleep infinity;
+        fi
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  saldo-data:
