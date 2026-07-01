@@ -45,6 +45,11 @@ def create_app() -> FastAPI:
     app.include_router(register_router, prefix="/auth", tags=["auth"])
     app.include_router(users_router, prefix="/users", tags=["users"])
 
+    # --- Budgeting ------------------------------------------------------
+    from app.modules.budgeting.router import router as budgeting_router
+
+    app.include_router(budgeting_router)
+
     return app
 
 
