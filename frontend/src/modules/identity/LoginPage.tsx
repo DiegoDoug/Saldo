@@ -1,11 +1,14 @@
 import { type FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { AuthLayout } from "./AuthLayout";
+import { loginErrorMessage } from "./authErrors";
 import { useLogin } from "./hooks";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const justRegistered = (location.state as { justRegistered?: boolean } | null)?.justRegistered;
   const login = useLogin();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +29,11 @@ export function LoginPage() {
       }
     >
       <form className="flex flex-col gap-3" onSubmit={onSubmit}>
+        {justRegistered && !login.isError && (
+          <p className="text-sm text-mint" role="status">
+            Tu cuenta fue creada. Inicia sesión para continuar.
+          </p>
+        )}
         <label className="text-sm font-medium">
           Correo
           <input
@@ -51,7 +59,7 @@ export function LoginPage() {
 
         {login.isError && (
           <p className="text-sm text-coral" role="alert">
-            No pudimos iniciar sesión. Revisa tus datos.
+            {loginErrorMessage(login.error)}
           </p>
         )}
 

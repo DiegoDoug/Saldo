@@ -14,6 +14,18 @@ interface Credentials {
   password: string;
 }
 
+/**
+ * Thrown when the account was created successfully but the automatic
+ * login-after-register step failed. Lets the UI send the user to the login
+ * screen instead of falsely claiming account creation failed.
+ */
+export class PostRegisterLoginError extends Error {
+  constructor(public override cause: unknown) {
+    super("Account created but automatic login failed");
+    this.name = "PostRegisterLoginError";
+  }
+}
+
 /** Log in, then fetch the profile — token is stored before /users/me is called. */
 async function loginAndLoadProfile({ email, password }: Credentials): Promise<void> {
   const token = await login(email, password);
@@ -36,7 +48,14 @@ export function useRegister() {
     mutationFn: async ({ email, password }: Credentials) => {
       await register(email, password);
       // Registration doesn't return a token, so log in immediately after.
-      await loginAndLoadProfile({ email, password });
+      // Keep this failure distinct: the account already exists at this point,
+      // so surfacing it as a creation failure would be wrong (and would make
+      // a retry hit a genuine "email already exists" conflict).
+      try {
+        await loginAndLoadProfile({ email, password });
+      } catch (err) {
+        throw new PostRegisterLoginError(err);
+      }
     },
   });
 }
