@@ -1,0 +1,4 @@
+# Stage 0 placeholder dependencies. Expanded in Stage 1 (SQLModel, Alembic,
+# fastapi-users, etc.). Pinned to majors to keep the Pi build reproducible.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
