@@ -1,0 +1,19 @@
+# Normalize line endings to avoid CRLF sneaking into the repo (and into images)
+# when the project is checked out on Windows. Shell scripts in particular must
+# stay LF: a CRLF shebang breaks `exec` inside the container ("/bin/sh: no such
+# file or directory").
+* text=auto eol=lf
+
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+
+# Keep binary assets untouched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
