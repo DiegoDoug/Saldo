@@ -10,6 +10,40 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 11 — Open-source polish
+
+**Built**
+- Finalized `README.md`: logo, **real screenshots** (dashboard / month / year),
+  "why Saldo", architecture summary, Docker quick-start, no-Docker dev setup,
+  test/lint commands, repo layout, links to CONTRIBUTING/DEPLOYMENT/PROGRESS.
+- `CONTRIBUTING.md`: ground rules (keep the domain core pure, user-isolation as a
+  security boundary, offline-first, Spanish vocabulary), feature-not-layer layout
+  note, dev setup, pre-PR checks, commit/PR conventions, v2-deferred scope.
+- `.env.example` finalized with the optional backup-job variables.
+- Real screenshots captured by driving the running app with Playwright/Chromium
+  against a seeded demo year (`frontend/scripts/screenshot.mjs`, a manual tool).
+- Nightly backup script already landed in Stage 10 (`ops/backup.sh`).
+
+**A bug found and fixed while capturing screenshots**
+- The first screenshot run surfaced **duplicate categories** on first login: a
+  concurrency race where `bootstrap()`'s `runSync()` returned early (guard flag)
+  while another sync was still pulling, so the empty-check seeded defaults on top
+  of server data. Fixed in a separate commit — `runSync` now shares one in-flight
+  promise, and default seeding runs in a single Dexie `rw` transaction. Re-seeded
+  end-to-end run confirmed categories no longer duplicate.
+
+**Verification**
+- Screenshots regenerated cleanly after the fix (no duplicates).
+- `tsc` clean; `vitest` → 42 passed; backend `pytest` → 44 passed; `ruff` clean.
+- Exit criterion (a stranger can clone + follow the README + run it): the README
+  + DEPLOYMENT cover Docker and manual setup end to end; the one thing not
+  executable in this sandbox remains the Docker image build (registry egress
+  blocked since Stage 0).
+
+**Project status: all 12 stages (0–11) complete.**
+
+---
+
 ## Stage 10 — Docker, CI/CD, deployment
 
 **Built**
