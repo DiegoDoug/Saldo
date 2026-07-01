@@ -85,21 +85,30 @@ function countConflicts(
   return conflicts;
 }
 
-let running = false;
+let inflight: Promise<boolean> | null = null;
 
 /**
  * Run one sync pass. Returns true if it completed, false if it was skipped
- * (offline, unauthenticated, or already running). Never throws for expected
+ * (offline / unauthenticated). Concurrent callers share a single in-flight run
+ * (so `await runSync()` always reflects a *completed* sync — `bootstrap` relies
+ * on this before deciding whether to seed defaults). Never throws for expected
  * offline/auth conditions — background sync must not crash the UI.
  */
-export async function runSync(): Promise<boolean> {
+export function runSync(): Promise<boolean> {
   const store = useSyncStore.getState();
-  if (running) return false;
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     store.setStatus("offline");
-    return false;
+    return Promise.resolve(false);
   }
-  running = true;
+  if (inflight) return inflight;
+  inflight = doSync().finally(() => {
+    inflight = null;
+  });
+  return inflight;
+}
+
+async function doSync(): Promise<boolean> {
+  const store = useSyncStore.getState();
   store.setStatus("syncing");
   try {
     const since = await getMeta(LAST_SYNC_KEY);
@@ -134,8 +143,6 @@ export async function runSync(): Promise<boolean> {
       console.error("Sync failed", err);
     }
     return false;
-  } finally {
-    running = false;
   }
 }
 

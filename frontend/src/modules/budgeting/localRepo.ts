@@ -30,19 +30,24 @@ const DEFAULT_CATEGORIES: { name: string; kind: Kind }[] = [
 ];
 
 export async function seedDefaultCategoriesIfEmpty(): Promise<void> {
-  const count = await db.categories.count();
-  if (count > 0) return;
-  const ts = nowIso();
-  await db.categories.bulkPut(
-    DEFAULT_CATEGORIES.map((c, i) => ({
-      id: newId(),
-      name: c.name,
-      kind: c.kind,
-      position: i,
-      updatedAt: ts,
-      deleted: 0 as const,
-    })),
-  );
+  // The count-then-insert runs in a single rw transaction so two concurrent
+  // callers (e.g. a double-invoked bootstrap) can't both pass the empty check
+  // and seed duplicates.
+  await db.transaction("rw", db.categories, async () => {
+    const count = await db.categories.count();
+    if (count > 0) return;
+    const ts = nowIso();
+    await db.categories.bulkPut(
+      DEFAULT_CATEGORIES.map((c, i) => ({
+        id: newId(),
+        name: c.name,
+        kind: c.kind,
+        position: i,
+        updatedAt: ts,
+        deleted: 0 as const,
+      })),
+    );
+  });
 }
 
 export async function addCategory(name: string, kind: Kind): Promise<void> {
