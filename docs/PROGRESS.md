@@ -10,6 +10,50 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 8 — PWA & offline hardening
+
+**Built**
+- `vite-plugin-pwa` (Workbox `generateSW`) configured in `vite.config.ts`:
+  precaches the app shell (js/css/html/png/woff2), `navigateFallback` to
+  `index.html` with an `/api` denylist (API data lives in Dexie, never
+  precached), and a CacheFirst runtime rule for Google Fonts. `registerType:
+  "prompt"`.
+- `manifest`: name/short_name, `standalone`, `start_url`/`scope` `/`, Cuaderno
+  theme/background colors, and 192/512 + maskable icons.
+- **Icons** generated from scratch with a stdlib-only Python PNG encoder (no
+  image tooling available): the on-brand mint "coin" mark with a coral accent,
+  at 192/512/180/48 in `public/`.
+- `PwaUpdatePrompt` — toast for "ready offline" and "new version → Actualizar"
+  via `useRegisterSW`.
+- **Conflict-surfacing UI**: `syncStore` tracks status + a count of records the
+  server overwrote (LWW); `syncEngine` detects conflicts by comparing each
+  pushed record's timestamp with the server's resolved version; `SyncStatusBar`
+  shows an offline banner and a dismissible "N cambios se actualizaron desde
+  otro dispositivo" notice.
+- Bundle split via `manualChunks` (react / charts) — resolves the Vite 500 kB
+  chunk warning from Stage 7.
+
+**Deviations from the plan**
+- Icons are a clean geometric "coin" mark rather than a rendered piggy bank,
+  because the environment has no rasterizer (PIL/ImageMagick/cairosvg absent);
+  hand-encoded PNGs keep them on-palette and installable. Easy to replace with
+  designed art later.
+
+**Verification**
+- `npm run typecheck` → clean; `npm test` → 39 passed; `npm run build` →
+  `sw.js` + `manifest.webmanifest` generated, 15 precache entries, chart code in
+  its own chunk. Manifest and both regular+maskable icons present in `dist/`.
+- The Lighthouse PWA audit and the airplane-mode click-through need a real
+  browser and are deferred to a host with one (same environment limits as
+  Stage 0); the installability prerequisites (SW precaching the shell, valid
+  manifest, icons, theme-color, offline `navigateFallback`) are all in place.
+
+**Open**
+- Dashboard customization (widget catalog, WidgetLayout, dnd-kit, themes) →
+  Stage 9.
+
+---
+
 ## Stage 7 — Frontend budgeting UI
 
 **Built**

@@ -24,6 +24,7 @@ import {
 } from "../budgeting/mappers";
 import { seedDefaultCategoriesIfEmpty } from "../budgeting/localRepo";
 import { pullSync, pushSync } from "./api";
+import { useSyncStore } from "./syncStore";
 
 const LAST_SYNC_KEY = "lastSyncAt";
 
@@ -66,6 +67,24 @@ function changedSince<T extends LocalCategory | LocalEntry>(rows: T[], since?: s
   return rows.filter((r) => toEpoch(r.updatedAt) > cutoff);
 }
 
+/**
+ * Count how many pushed records the server overwrote: a "conflict" is a record
+ * we sent whose authoritative version came back with a strictly newer
+ * timestamp (the server's copy won last-write-wins).
+ */
+function countConflicts(
+  sent: { id: string; updated_at: string }[],
+  resolved: { id: string; updated_at: string }[],
+): number {
+  const sentAt = new Map(sent.map((r) => [r.id, toEpoch(r.updated_at)]));
+  let conflicts = 0;
+  for (const r of resolved) {
+    const mine = sentAt.get(r.id);
+    if (mine !== undefined && toEpoch(r.updated_at) > mine) conflicts += 1;
+  }
+  return conflicts;
+}
+
 let running = false;
 
 /**
@@ -74,9 +93,14 @@ let running = false;
  * offline/auth conditions — background sync must not crash the UI.
  */
 export async function runSync(): Promise<boolean> {
+  const store = useSyncStore.getState();
   if (running) return false;
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    store.setStatus("offline");
+    return false;
+  }
   running = true;
+  store.setStatus("syncing");
   try {
     const since = await getMeta(LAST_SYNC_KEY);
 
@@ -87,6 +111,10 @@ export async function runSync(): Promise<boolean> {
 
     if (dirtyCategories.length || dirtyEntries.length) {
       const pushed = await pushSync(dirtyCategories, dirtyEntries);
+      const conflicts =
+        countConflicts(dirtyCategories, pushed.categories) +
+        countConflicts(dirtyEntries, pushed.entries);
+      if (conflicts > 0) store.addConflicts(conflicts);
       await mergeCategories(pushed.categories);
       await mergeEntries(pushed.entries);
     }
@@ -95,10 +123,13 @@ export async function runSync(): Promise<boolean> {
     await mergeCategories(pulled.categories);
     await mergeEntries(pulled.entries);
     await setMeta(LAST_SYNC_KEY, pulled.server_time);
+    store.setLastSyncAt(pulled.server_time);
+    store.setStatus("idle");
     return true;
   } catch (err) {
     // 401 (token expired) or a network blip: leave local data intact and retry
     // on the next trigger. Anything unexpected is surfaced for debugging.
+    store.setStatus("error");
     if (!(err instanceof ApiError) && !(err instanceof TypeError)) {
       console.error("Sync failed", err);
     }

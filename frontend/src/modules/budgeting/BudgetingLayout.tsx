@@ -5,6 +5,8 @@ import { BarChart3, ChevronLeft, ChevronRight, Home, LogOut, PiggyBank } from "l
 import { Link, NavLink, Outlet } from "react-router-dom";
 
 import { useLogout } from "../identity/hooks";
+import { PwaUpdatePrompt } from "../sync/PwaUpdatePrompt";
+import { SyncStatusBar } from "../sync/SyncStatusBar";
 import { useBudgetingUi } from "./uiStore";
 
 export function BudgetingLayout() {
@@ -57,9 +59,13 @@ export function BudgetingLayout() {
         </div>
       </header>
 
+      <SyncStatusBar />
+
       <main className="mx-auto max-w-3xl p-4">
         <Outlet />
       </main>
+
+      <PwaUpdatePrompt />
 
       <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-center gap-2 border-t border-line bg-card/95 p-2 backdrop-blur">
         <BottomLink to="/" icon={<Home size={20} />} label="Inicio" end />
