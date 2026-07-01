@@ -10,6 +10,45 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 10 — Docker, CI/CD, deployment
+
+**Built**
+- Backend container now self-heals the schema: `entrypoint.sh` runs
+  `alembic upgrade head` then launches uvicorn; Dockerfile `CMD` uses it. A
+  fresh `saldo-data` volume (or an upgraded image) migrates itself on start.
+- `.github/workflows/release.yml` — on push to `main` and on `v*` tags, builds
+  **multi-arch (amd64 + arm64)** backend and frontend images via Buildx/QEMU and
+  pushes them to **GHCR**, with `docker/metadata-action` tags (branch, semver,
+  sha) and GHA build cache.
+- `docs/DEPLOYMENT.md` — full guide: configure `.env` + JWT secret, `docker
+  compose up`, **Cloudflare Tunnel** setup (create tunnel, set token, route the
+  public hostname to `frontend:80`), Raspberry Pi notes, using the prebuilt GHCR
+  images via a compose override, and updating.
+- `ops/backup.sh` — nightly SQLite → S3-compatible backup (consistent
+  `sqlite3 .backup` snapshot, gzip, timestamped upload; works with AWS/B2/MinIO
+  via `AWS_ENDPOINT_URL`), with a sample cron line. (Pulled forward from Stage 11
+  so `DEPLOYMENT.md`'s reference resolves.)
+
+**Deviations from the plan**
+- The default `docker-compose.yml` still **builds from source** (so a fresh clone
+  + `docker compose up` works with no registry access), and using the prebuilt
+  GHCR images is documented as an opt-in override rather than the default.
+
+**Verification**
+- `docker compose config` validates; `entrypoint.sh` and `backup.sh` pass
+  `sh -n`.
+- The actual multi-arch image build + `docker compose up` on arm64 could **not**
+  be run in this environment (Docker Hub/registry egress is blocked, same limit
+  noted since Stage 0). The Dockerfiles, entrypoint, compose file, and workflow
+  are complete and internally consistent; they build and run on a host with
+  normal registry access / in GitHub Actions.
+
+**Open**
+- README + screenshots, CONTRIBUTING, finalized `.env.example` → Stage 11
+  (backup script already landed here).
+
+---
+
 ## Stage 9 — Dashboard customization
 
 **Built**
