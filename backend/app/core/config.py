@@ -1,0 +1,59 @@
+"""Environment-based application settings.
+
+All configuration comes from the environment (or a local `.env` file), prefixed
+with `SALDO_`. There is exactly one place to look for "what is configurable" —
+this module — and one instance, `settings`, imported everywhere else.
+"""
+
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="SALDO_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # --- Database -------------------------------------------------------
+    # Sync-style SQLAlchemy URL. Alembic uses this as-is; the app runtime
+    # derives an async variant from it (see `async_database_url`).
+    database_url: str = "sqlite:///./data/saldo.db"
+
+    # --- Auth (used from Stage 2) --------------------------------------
+    jwt_secret: str = "change-me-in-production"
+    jwt_lifetime_seconds: int = 60 * 60 * 24 * 7  # 7 days
+
+    # --- CORS -----------------------------------------------------------
+    # Comma-separated in the environment (SALDO_CORS_ORIGINS); exposed as a
+    # parsed list via `cors_origins_list`.
+    cors_origins: str = "http://localhost:5173,http://localhost:8080"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def async_database_url(self) -> str:
+        """The runtime (async) DB URL.
+
+        SQLite needs the `aiosqlite` driver for async SQLAlchemy. We accept the
+        plain `sqlite://` form in config (what Alembic and most tooling expect)
+        and inject the async driver here so there is a single source of truth
+        for the database location.
+        """
+        if self.database_url.startswith("sqlite:///"):
+            return self.database_url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+        return self.database_url
+
+
+@lru_cache
+def get_settings() -> Settings:
+    """Cached accessor so the `.env` file is read once per process."""
+    return Settings()
+
+
+settings = get_settings()

@@ -1,20 +1,45 @@
-"""Stage 0 placeholder API.
+"""Saldo backend — FastAPI application factory.
 
-A minimal FastAPI app so `docker compose up` has a running backend from the very
-first commit. Stage 1 replaces this with a proper app factory under
-`app/core/` and real modules under `app/modules/`.
+Keep this thin. It wires cross-cutting concerns (CORS, meta endpoints) and
+mounts feature-module routers. All real logic lives in `app/modules/*` and the
+framework-free domain core in `app/shared/domain/`.
 """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Saldo API (placeholder)")
-
-
-@app.get("/")
-def root() -> dict[str, str]:
-    return {"app": "saldo", "status": "placeholder", "stage": "0"}
+from app.core.config import settings
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="Saldo API",
+        version="0.1.0",
+        description="Offline-first, self-hosted personal finance.",
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.get("/", tags=["meta"])
+    async def root() -> dict[str, str]:
+        return {"app": "saldo", "version": app.version}
+
+    @app.get("/health", tags=["meta"])
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    # Feature-module routers are mounted here as stages land:
+    # from app.modules.identity.router import auth_router, register_router
+    # app.include_router(auth_router)
+    # app.include_router(register_router)
+
+    return app
+
+
+app = create_app()

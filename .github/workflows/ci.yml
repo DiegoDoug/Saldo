@@ -30,14 +30,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install ruff pytest
+          pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
-        run: ruff check . || echo "ruff: no config yet (Stage 0)"
+        run: ruff check .
 
       - name: Test (pytest)
-        run: pytest -q || echo "pytest: no tests yet (Stage 0)"
+        run: pytest
 
   frontend:
     name: Frontend (lint + test)
