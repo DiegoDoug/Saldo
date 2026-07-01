@@ -34,10 +34,16 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    # Feature-module routers are mounted here as stages land:
-    # from app.modules.identity.router import auth_router, register_router
-    # app.include_router(auth_router)
-    # app.include_router(register_router)
+    # --- Identity (auth) ------------------------------------------------
+    from app.modules.identity.router import (
+        auth_router,
+        register_router,
+        users_router,
+    )
+
+    app.include_router(auth_router, prefix="/auth/jwt", tags=["auth"])
+    app.include_router(register_router, prefix="/auth", tags=["auth"])
+    app.include_router(users_router, prefix="/users", tags=["users"])
 
     return app
 

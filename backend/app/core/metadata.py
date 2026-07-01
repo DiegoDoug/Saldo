@@ -10,7 +10,8 @@ is an import aggregator for migrations, not a shared models dumping ground.
 from sqlmodel import SQLModel
 
 # Feature-module tables are imported here as they are introduced:
-# from app.modules.identity import models as _identity  # noqa: F401
+from app.modules.identity import models as _identity  # noqa: F401
+
 # from app.modules.budgeting import models as _budgeting  # noqa: F401
 
 metadata = SQLModel.metadata
