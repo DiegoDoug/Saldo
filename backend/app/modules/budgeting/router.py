@@ -24,17 +24,19 @@ from app.modules.budgeting.schemas import (
     YearSummary,
 )
 from app.modules.budgeting.service import (
-    entries_to_month_input,
+    build_month_input,
     get_owned_category,
     get_owned_entry,
     list_entries_for_year,
 )
 from app.modules.identity.dependencies import CurrentUser
+from app.shared.currency import FxRateProvider, get_fx_provider
 from app.shared.domain.budgeting import compute_month, compute_year
 
 router = APIRouter(prefix="/budgeting", tags=["budgeting"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+Fx = Annotated[FxRateProvider, Depends(get_fx_provider)]
 
 
 # ======================================================================
@@ -201,7 +203,7 @@ def _month_summary(year: int, month: int, result) -> MonthSummary:
 
 
 @router.get("/summary/{year}/{month}", response_model=MonthSummary)
-async def month_summary(year: int, month: int, user: CurrentUser, session: Session):
+async def month_summary(year: int, month: int, user: CurrentUser, session: Session, fx: Fx):
     result = await session.execute(
         select(Entry).where(
             Entry.user_id == user.id,
@@ -211,19 +213,22 @@ async def month_summary(year: int, month: int, user: CurrentUser, session: Sessi
         )
     )
     entries = list(result.scalars().all())
-    computed = compute_month(entries_to_month_input(entries))
+    month_input = await build_month_input(entries, user.default_currency, fx)
+    computed = compute_month(month_input)
     return _month_summary(year, month, computed)
 
 
 @router.get("/summary/{year}", response_model=YearSummary)
-async def year_summary(year: int, user: CurrentUser, session: Session):
+async def year_summary(year: int, user: CurrentUser, session: Session, fx: Fx):
     entries = await list_entries_for_year(session, user.id, year)
     by_month: list[list[Entry]] = [[] for _ in range(12)]
     for e in entries:
         if 0 <= e.month <= 11:
             by_month[e.month].append(e)
 
-    month_inputs = [entries_to_month_input(m) for m in by_month]
+    month_inputs = [
+        await build_month_input(m, user.default_currency, fx) for m in by_month
+    ]
     computed = compute_year(month_inputs)
     return YearSummary(
         year=year,

@@ -10,6 +10,46 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 5 — Backend sync & multi-currency
+
+**Built**
+- `app/modules/sync/` slice:
+  - `schemas.py` — `CategorySync`/`EntrySync` (each carries `updated_at` +
+    `deleted`), `PushRequest`, `PushResponse`, `PullResponse`.
+  - `router.py` — `POST /sync/push` and `GET /sync/pull?since=`. Push upserts
+    with **last-write-wins on `updated_at`** (incoming applies iff its timestamp
+    ≥ the stored one), making replays idempotent. Pull returns records changed
+    since a timestamp, **including tombstones** so offline deletes propagate.
+    Pushing another user's id is refused (403).
+- `app/shared/currency.py` — `FxRateProvider` calling **Frankfurter**
+  (`/latest`), caching each `(base, target)` rate for the current day. Injected
+  via `get_fx_provider` so tests stub it. `FRANKFURTER_BASE_URL` keyless.
+- Currency-aware summaries: `service.build_month_input` fetches one rate per
+  foreign currency and converts to the user's `default_currency` **only when a
+  month actually mixes currencies**; a single-currency month makes zero FX
+  calls. Month and year summary routes now take the FX dependency.
+- Timestamps switched to naive-UTC (`utcnow`) so in-memory and SQLite-reloaded
+  values compare consistently for LWW.
+- Tests: `test_sync.py` (idempotent replay, stale-vs-fresh LWW, pull-since +
+  tombstones, cross-user push refused) and `test_currency.py` (single-currency
+  makes no FX call; mixed EUR/USD converts and totals correctly, FX stubbed).
+
+**Deviations from the plan**
+- The FX daily cache is in-process (per-worker), not persisted. For a single-Pi
+  deployment that's sufficient and simplest; a note for a future multi-worker
+  fork. No stack change — still Frankfurter, still called only on mixed views.
+- `Entry.currency` already landed in Stage 4, so Stage 5 added no migration.
+
+**Verification**
+- `pytest` → 40 passed; `ruff check .` → clean.
+- Offline-queue replay is idempotent; mixed EUR/USD month totals correctly
+  (100 EUR + 100 USD @ 0.5 → 150 EUR).
+
+**Open**
+- Frontend consumes `/sync` (Dexie ↔ backend) in Stages 6–8.
+
+---
+
 ## Stage 4 — Backend budgeting API
 
 **Built**

@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 CategoryKind = Literal["income", "fixed", "variable"]
 EntryKind = Literal["income", "fixed", "variable", "goal"]
@@ -29,6 +29,8 @@ class CategoryUpdate(BaseModel):
 
 
 class CategoryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     name: str
     kind: str
@@ -61,6 +63,8 @@ class EntryUpdate(BaseModel):
 
 
 class EntryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     year: int
     month: int

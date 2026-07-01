@@ -10,7 +10,7 @@ the core understands.
 """
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -50,22 +50,50 @@ async def list_entries_for_year(
     return list(result.scalars().all())
 
 
-def entries_to_month_input(entries: Sequence[Entry]) -> MonthInput:
+def entries_to_month_input(
+    entries: Sequence[Entry],
+    amount_of: Callable[[Entry], float] | None = None,
+) -> MonthInput:
     """Collapse a single month's entries into the domain core's MonthInput.
 
     Only the totals matter to the formulas, so every income line folds into
     `extras`; the distinct nomina/otros slots from the prototype are not needed
     here (they merely summed into incomeTotal).
 
-    Note: amounts are summed as-is. Multi-currency conversion happens upstream in
-    Stage 5 before entries reach this function; a single-currency month passes
-    through unchanged.
+    `amount_of` maps an entry to the amount to use. It defaults to the raw
+    `entry.amount` (single-currency months). When a month mixes currencies, the
+    summary route passes a function that converts each amount to the user's
+    target currency first (see the FX handling in the budgeting router).
     """
+    amt = amount_of or (lambda e: e.amount)
     return MonthInput(
         nomina=0.0,
         otros=0.0,
-        savings_goal=sum(e.amount for e in entries if e.kind == "goal"),
-        extras=[e.amount for e in entries if e.kind == "income"],
-        fixed=[e.amount for e in entries if e.kind == "fixed"],
-        variable=[e.amount for e in entries if e.kind == "variable"],
+        savings_goal=sum(amt(e) for e in entries if e.kind == "goal"),
+        extras=[amt(e) for e in entries if e.kind == "income"],
+        fixed=[amt(e) for e in entries if e.kind == "fixed"],
+        variable=[amt(e) for e in entries if e.kind == "variable"],
     )
+
+
+def _distinct_currencies(entries: Sequence[Entry]) -> set[str]:
+    return {e.currency.upper() for e in entries}
+
+
+async def build_month_input(
+    entries: Sequence[Entry],
+    target_currency: str,
+    fx,
+) -> MonthInput:
+    """Build a MonthInput, converting to `target_currency` only if needed.
+
+    A single-currency month (the common case) skips FX entirely. A mixed-currency
+    month fetches one rate per foreign currency and converts each amount.
+    """
+    currencies = _distinct_currencies(entries)
+    if len(currencies) <= 1:
+        return entries_to_month_input(entries)
+
+    target = target_currency.upper()
+    rates = {c: await fx.get_rate(c, target) for c in currencies}
+    return entries_to_month_input(entries, amount_of=lambda e: e.amount * rates[e.currency.upper()])

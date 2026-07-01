@@ -50,6 +50,11 @@ def create_app() -> FastAPI:
 
     app.include_router(budgeting_router)
 
+    # --- Sync -----------------------------------------------------------
+    from app.modules.sync.router import router as sync_router
+
+    app.include_router(sync_router)
+
     return app
 
 

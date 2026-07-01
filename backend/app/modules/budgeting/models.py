@@ -23,7 +23,11 @@ ENTRY_KINDS = ("income", "fixed", "variable", "goal")
 
 
 def utcnow() -> datetime:
-    return datetime.now(UTC)
+    # Naive UTC: SQLite stores datetimes without tz and reads them back naive,
+    # so keeping the in-memory value naive-UTC too means an object and its
+    # reloaded copy compare consistently — which the sync last-write-wins
+    # comparison in Stage 5 relies on.
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Category(SQLModel, table=True):
