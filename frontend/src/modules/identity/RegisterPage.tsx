@@ -2,7 +2,8 @@ import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { AuthLayout } from "./AuthLayout";
-import { useRegister } from "./hooks";
+import { registerErrorMessage } from "./authErrors";
+import { PostRegisterLoginError, useRegister } from "./hooks";
 
 export function RegisterPage() {
   const navigate = useNavigate();
@@ -12,7 +13,19 @@ export function RegisterPage() {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    registerMutation.mutate({ email, password }, { onSuccess: () => navigate("/") });
+    registerMutation.mutate(
+      { email, password },
+      {
+        onSuccess: () => navigate("/"),
+        onError: (err) => {
+          // Account was created; only the auto-login failed. Send them to the
+          // login screen instead of claiming the account couldn't be created.
+          if (err instanceof PostRegisterLoginError) {
+            navigate("/login", { state: { justRegistered: true } });
+          }
+        },
+      },
+    );
   }
 
   return (
@@ -50,11 +63,12 @@ export function RegisterPage() {
           />
         </label>
 
-        {registerMutation.isError && (
-          <p className="text-sm text-coral" role="alert">
-            No pudimos crear la cuenta. ¿Ese correo ya existe?
-          </p>
-        )}
+        {registerMutation.isError &&
+          !(registerMutation.error instanceof PostRegisterLoginError) && (
+            <p className="text-sm text-coral" role="alert">
+              {registerErrorMessage(registerMutation.error)}
+            </p>
+          )}
 
         <button className="btn-primary mt-2" type="submit" disabled={registerMutation.isPending}>
           {registerMutation.isPending ? "Creando…" : "Crear cuenta"}
