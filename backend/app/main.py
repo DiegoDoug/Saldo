@@ -55,6 +55,11 @@ def create_app() -> FastAPI:
 
     app.include_router(sync_router)
 
+    # --- Layout ---------------------------------------------------------
+    from app.modules.layout.router import router as layout_router
+
+    app.include_router(layout_router)
+
     return app
 
 

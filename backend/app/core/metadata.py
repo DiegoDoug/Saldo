@@ -13,5 +13,6 @@ from app.modules.budgeting import models as _budgeting  # noqa: F401
 
 # Feature-module tables are imported here as they are introduced:
 from app.modules.identity import models as _identity  # noqa: F401
+from app.modules.layout import models as _layout  # noqa: F401
 
 metadata = SQLModel.metadata

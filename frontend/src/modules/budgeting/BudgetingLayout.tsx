@@ -2,8 +2,10 @@
  * logout) and a bottom nav, with the active view rendered via <Outlet />. */
 
 import { BarChart3, ChevronLeft, ChevronRight, Home, LogOut, PiggyBank } from "lucide-react";
+import { useEffect } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 
+import { useLayout } from "../dashboard/layoutRepo";
 import { useLogout } from "../identity/hooks";
 import { PwaUpdatePrompt } from "../sync/PwaUpdatePrompt";
 import { SyncStatusBar } from "../sync/SyncStatusBar";
@@ -13,6 +15,12 @@ export function BudgetingLayout() {
   const year = useBudgetingUi((s) => s.currentYear);
   const stepYear = useBudgetingUi((s) => s.stepYear);
   const logout = useLogout();
+  const theme = useLayout().theme;
+
+  // Apply the user's theme app-wide via a data attribute (see index.css).
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   return (
     <div className="min-h-screen pb-20">

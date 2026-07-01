@@ -15,6 +15,21 @@
     background-image: radial-gradient(#e7e0d4 0.5px, transparent 0.5px);
     background-size: 22px 22px;
   }
+
+  /* Per-user themes (selected on the dashboard, applied via data-theme). */
+  [data-theme="liso"] body {
+    background-image: none;
+  }
+
+  [data-theme="carbon"] body {
+    @apply text-mint-soft;
+    background-color: #1c2826;
+    background-image: radial-gradient(#2a3a37 0.5px, transparent 0.5px);
+  }
+  [data-theme="carbon"] .card-panel {
+    background-color: #243531;
+    border-color: #33403c;
+  }
 }
 
 @layer components {

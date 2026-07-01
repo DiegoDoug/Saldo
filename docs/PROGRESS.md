@@ -10,6 +10,51 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 9 — Dashboard customization
+
+**Built**
+- **Backend** `app/modules/layout/`: `WidgetLayout` table (user_id PK → one row
+  per user, JSON `data` blob, `updated_at`), `GET /layout` (empty default) and
+  `PUT /layout` (last-write-wins on `updated_at`), scoped by user. Migration
+  `add widget_layout table`. Tests: default-empty, round-trip, LWW ignores
+  stale, per-user isolation.
+- **Frontend** `modules/dashboard/`:
+  - `widgets.tsx` — fixed widget catalog (hero, quick stats, savings-rate,
+    trend chart, month grid), each a self-contained card taking the year's calc.
+  - `layoutRepo.ts` — Dexie-mirrored layout (`layout` table, schema v2), theme
+    list, and `resolveLayout` (normalizes stored layout against the catalog:
+    appends new widgets, drops unknown ids).
+  - `layoutSync.ts` — reconcile local layout with `/layout` (LWW).
+  - `DashboardPage.tsx` — renders visible widgets in order; "Personalizar" edit
+    mode with **dnd-kit** drag-to-reorder (keyboard-accessible), per-widget
+    visibility toggles, and a **theme picker**. Writes Dexie-first then push.
+  - Theme applied app-wide via `data-theme` on `<html>` (index.css themes:
+    cuaderno / liso / carbón).
+- Layout sync wired into `SyncProvider` (on auth, on reconnect).
+- Tests: `resolveLayout` (defaults, append-missing, drop-unknown).
+
+**Deviations from the plan**
+- Themes affect the page backdrop + panels (cuaderno dots / plain / dark carbón)
+  rather than a full palette reskin — the Tailwind tokens are compile-time, so a
+  full theming system would need a CSS-variable refactor. The current set gives a
+  visibly different, persisted per-user look; deeper theming is a later option.
+- Layout uses a dedicated `/layout` endpoint + its own Dexie table and sync pass,
+  rather than folding into the entry/category `/sync` batch — keeps the JSON-blob
+  shape separate from the row-based sync and simpler to reason about.
+
+**Verification**
+- Backend: `pytest` → 44 passed; `ruff` clean; migration applies.
+- Frontend: `tsc` clean; `vitest` → 42 passed; `build` succeeds (PWA emitted).
+- Two users get independent, persisted layouts (backend isolation test +
+  Dexie-mirrored, LWW-synced); the visible drag/theme difference needs a browser
+  and is deferred with the other manual UI checks.
+
+**Open**
+- Final Docker/compose, multi-arch CI→GHCR, Cloudflare Tunnel docs → Stage 10.
+- README/CONTRIBUTING/backup script → Stage 11.
+
+---
+
 ## Stage 8 — PWA & offline hardening
 
 **Built**

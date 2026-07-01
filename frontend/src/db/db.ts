@@ -46,11 +46,28 @@ export interface LocalMeta {
   value: string;
 }
 
+/** Dashboard widget layout + theme (a single row keyed by "me"). */
+export interface LocalLayout {
+  id: string; // always "me"
+  data: LayoutData;
+  updatedAt: string;
+}
+
+export interface LayoutData {
+  /** Widget ids in display order. */
+  order: string[];
+  /** Widget ids the user has hidden. */
+  hidden: string[];
+  /** Selected theme id. */
+  theme: string;
+}
+
 export class SaldoDB extends Dexie {
   categories!: Table<LocalCategory, string>;
   entries!: Table<LocalEntry, string>;
   profile!: Table<LocalProfile, string>;
   meta!: Table<LocalMeta, string>;
+  layout!: Table<LocalLayout, string>;
 
   constructor() {
     super("saldo");
@@ -59,6 +76,9 @@ export class SaldoDB extends Dexie {
       entries: "id, [year+month], year, month, kind, deleted, updatedAt",
       profile: "id",
       meta: "key",
+    });
+    this.version(2).stores({
+      layout: "id",
     });
   }
 }

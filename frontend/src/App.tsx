@@ -1,9 +1,9 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { BudgetingLayout } from "./modules/budgeting/BudgetingLayout";
-import { DashboardPage } from "./modules/budgeting/DashboardPage";
 import { MonthView } from "./modules/budgeting/MonthView";
 import { YearView } from "./modules/budgeting/YearView";
+import { DashboardPage } from "./modules/dashboard/DashboardPage";
 import { LoginPage } from "./modules/identity/LoginPage";
 import { RegisterPage } from "./modules/identity/RegisterPage";
 import { SyncProvider } from "./modules/sync/SyncProvider";

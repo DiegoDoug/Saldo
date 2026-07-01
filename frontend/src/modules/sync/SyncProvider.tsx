@@ -6,6 +6,7 @@
 
 import { type ReactNode, useEffect } from "react";
 
+import { runLayoutSync } from "../dashboard/layoutSync";
 import { useAuthStore } from "../identity/authStore";
 import { bootstrap, runSync } from "./syncEngine";
 
@@ -16,14 +17,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) return;
-    void bootstrap();
+    void bootstrap().then(() => runLayoutSync());
 
-    const onOnline = () => void runSync();
-    window.addEventListener("online", onOnline);
+    const onReconnect = () => {
+      void runSync();
+      void runLayoutSync();
+    };
+    window.addEventListener("online", onReconnect);
     const interval = window.setInterval(() => void runSync(), SYNC_INTERVAL_MS);
 
     return () => {
-      window.removeEventListener("online", onOnline);
+      window.removeEventListener("online", onReconnect);
       window.clearInterval(interval);
     };
   }, [token]);
