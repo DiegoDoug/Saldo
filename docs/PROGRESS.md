@@ -10,6 +10,59 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 7 — Frontend budgeting UI
+
+**Built**
+- **Dexie-first data layer** (`modules/budgeting/localRepo.ts`): seed default
+  categories on first run, add/rename/delete categories (delete tombstones the
+  category *and* its entries), set a category's monthly amount, set the month
+  goal. Every write bumps `updatedAt`; deletes are tombstones.
+- **Mappers** (`mappers.ts`): wire↔local↔sync shape conversion +
+  `entriesToMonthInput` (feeds the shared domain core from local rows).
+- **Reactive reads** (`hooks.ts`) via `dexie-react-hooks` `useLiveQuery` —
+  `useCategories`, `useMonthResult`, `useYearResult` recompute from Dexie
+  automatically (including after a background sync merges server changes).
+- **Sync engine** (`modules/sync/`): `runSync` pushes changes since the last
+  watermark, merges the server's resolved versions, pulls remote changes, all
+  LWW on `updatedAt` compared as epoch ms (`toEpoch` normalizes the backend's
+  zone-less UTC vs the client's `Z`). `bootstrap` seeds defaults only if the
+  account is genuinely empty after the first sync. `SyncProvider` triggers sync
+  on auth, on `online`, and on a 30 s interval — never blocking the UI.
+- **Views** ported from the prototype and restyled with Tailwind/Cuaderno:
+  `DashboardPage` (hero, quick stats, monthly trend line chart, month grid),
+  `MonthView` (summary card, spend meter, income/goal/fixed/variable sections
+  with inline category rename + delete + add, breakdown donut), `YearView`
+  (totals, income-vs-expenses bars, category ranking). `BudgetingLayout` shell
+  (brand, year switch, logout, bottom nav). `MoneyInput` primitive
+  (format-at-rest, edit-on-focus). Routing under a protected `SyncProvider`
+  layout.
+- Tests: `mappers.test.ts` (grouping + tombstone filtering), `syncEngine.test.ts`
+  (`toEpoch` cross-format ordering).
+
+**Deviations from the plan**
+- Income lines are modeled as `kind="income"` **categories** (each with monthly
+  entries), unifying income/expense under one "category + monthly entry" model
+  rather than the prototype's fixed nomina/otros slots. Cleaner relationally and
+  makes "add income" just another category CRUD. Totals are identical (income
+  all folds into the domain core's `extras`).
+- Client-side compute assumes a single currency per month (prototype parity).
+  Mixed-currency *display* offline would need cached FX; the backend summary
+  endpoints already convert, and this is noted for a later enhancement.
+- Recharts pushes the bundle over Vite's 500 kB warning threshold. Non-fatal;
+  code-splitting/manualChunks is queued for Stage 8/10.
+
+**Verification**
+- `npm run typecheck` → clean; `npm test` → 39 passed; `npm run build` → bundle
+  built (Tailwind 16 kB CSS).
+- Full offline click-through (airplane mode, edit, reconnect, confirm sync)
+  needs a real browser/PWA and is the focus of Stage 8; the data flow is wired
+  (Dexie-first writes + reconnect-triggered sync) and unit-tested here.
+
+**Open**
+- PWA/service worker + installability + conflict-surfacing UI → Stage 8.
+
+---
+
 ## Stage 6 — Frontend foundation
 
 **Built**
