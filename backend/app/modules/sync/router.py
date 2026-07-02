@@ -18,9 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.core.db import get_session
+from app.modules.accounts.models import Account
 from app.modules.budgeting.models import Category, Entry, utcnow
 from app.modules.identity.dependencies import CurrentUser
 from app.modules.sync.schemas import (
+    AccountSync,
     CategorySync,
     EntrySync,
     PullResponse,
@@ -43,6 +45,47 @@ def _to_naive_utc(dt: datetime) -> datetime:
 def _ensure_owned(record, user_id: uuid.UUID) -> None:
     if record is not None and record.user_id != user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Record belongs to another user")
+
+
+async def _upsert_account(
+    session: AsyncSession, user_id: uuid.UUID, incoming: AccountSync
+) -> Account:
+    existing = await session.get(Account, incoming.id)
+    _ensure_owned(existing, user_id)
+    inc_ts = _to_naive_utc(incoming.updated_at)
+
+    if existing is None:
+        account = Account(
+            id=incoming.id,
+            user_id=user_id,
+            name=incoming.name,
+            type=incoming.type,
+            currency=incoming.currency.upper(),
+            opening_balance=incoming.opening_balance,
+            color=incoming.color,
+            icon=incoming.icon,
+            position=incoming.position,
+            archived=incoming.archived,
+            created_at=inc_ts,
+            updated_at=inc_ts,
+            deleted=incoming.deleted,
+        )
+        session.add(account)
+        return account
+
+    if inc_ts >= existing.updated_at:
+        existing.name = incoming.name
+        existing.type = incoming.type
+        existing.currency = incoming.currency.upper()
+        existing.opening_balance = incoming.opening_balance
+        existing.color = incoming.color
+        existing.icon = incoming.icon
+        existing.position = incoming.position
+        existing.archived = incoming.archived
+        existing.deleted = incoming.deleted
+        existing.updated_at = inc_ts
+        session.add(existing)
+    return existing
 
 
 async def _upsert_category(
@@ -118,25 +161,33 @@ async def _upsert_entry(
 
 @router.post("/push", response_model=PushResponse)
 async def push(payload: PushRequest, user: CurrentUser, session: Session):
+    accounts = [await _upsert_account(session, user.id, a) for a in payload.accounts]
     categories = [await _upsert_category(session, user.id, c) for c in payload.categories]
     entries = [await _upsert_entry(session, user.id, e) for e in payload.entries]
     await session.commit()
-    for record in (*categories, *entries):
+    for record in (*accounts, *categories, *entries):
         await session.refresh(record)
-    return PushResponse(categories=categories, entries=entries, server_time=utcnow())
+    return PushResponse(
+        accounts=accounts, categories=categories, entries=entries, server_time=utcnow()
+    )
 
 
 @router.get("/pull", response_model=PullResponse)
 async def pull(user: CurrentUser, session: Session, since: datetime | None = None):
+    acc_stmt = select(Account).where(Account.user_id == user.id)
     cat_stmt = select(Category).where(Category.user_id == user.id)
     entry_stmt = select(Entry).where(Entry.user_id == user.id)
     if since is not None:
         cutoff = _to_naive_utc(since)
+        acc_stmt = acc_stmt.where(Account.updated_at > cutoff)
         cat_stmt = cat_stmt.where(Category.updated_at > cutoff)
         entry_stmt = entry_stmt.where(Entry.updated_at > cutoff)
 
     # Tombstones (deleted=True) are intentionally included so the client can
     # remove locally-deleted records it hasn't yet seen the deletion for.
+    accounts = list((await session.execute(acc_stmt)).scalars().all())
     categories = list((await session.execute(cat_stmt)).scalars().all())
     entries = list((await session.execute(entry_stmt)).scalars().all())
-    return PullResponse(categories=categories, entries=entries, server_time=utcnow())
+    return PullResponse(
+        accounts=accounts, categories=categories, entries=entries, server_time=utcnow()
+    )

@@ -11,7 +11,24 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.modules.accounts.schemas import AccountRead
 from app.modules.budgeting.schemas import CategoryRead, EntryRead
+
+
+class AccountSync(BaseModel):
+    id: uuid.UUID
+    name: str
+    type: Literal[
+        "checking", "savings", "cash", "credit_card", "investment", "crypto"
+    ]
+    currency: str = "EUR"
+    opening_balance: float = 0.0
+    color: str = ""
+    icon: str = ""
+    position: int = 0
+    archived: bool = False
+    updated_at: datetime
+    deleted: bool = False
 
 
 class CategorySync(BaseModel):
@@ -37,6 +54,7 @@ class EntrySync(BaseModel):
 
 
 class PushRequest(BaseModel):
+    accounts: list[AccountSync] = []
     categories: list[CategorySync] = []
     entries: list[EntrySync] = []
 
@@ -44,12 +62,14 @@ class PushRequest(BaseModel):
 class PushResponse(BaseModel):
     # The authoritative server state for every pushed id, after LWW resolution,
     # so the client can overwrite its local copy where the server won.
+    accounts: list[AccountRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime
 
 
 class PullResponse(BaseModel):
+    accounts: list[AccountRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime

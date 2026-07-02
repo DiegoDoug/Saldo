@@ -9,6 +9,7 @@ is an import aggregator for migrations, not a shared models dumping ground.
 
 from sqlmodel import SQLModel
 
+from app.modules.accounts import models as _accounts  # noqa: F401
 from app.modules.budgeting import models as _budgeting  # noqa: F401
 
 # Feature-module tables are imported here as they are introduced:
