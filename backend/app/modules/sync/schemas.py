@@ -15,8 +15,22 @@ from pydantic import BaseModel
 from app.modules.accounts.schemas import AccountRead
 from app.modules.bills.schemas import RecurringRuleRead
 from app.modules.budgeting.schemas import CategoryRead, EntryRead
+from app.modules.goals.schemas import GoalRead
 from app.modules.merchants.schemas import MerchantRead
 from app.modules.transactions.schemas import TransactionRead
+
+
+class GoalSync(BaseModel):
+    id: uuid.UUID
+    name: str
+    kind: Literal["emergency", "vacation", "house", "car", "custom"]
+    target_amount: float = 0.0
+    current_amount: float = 0.0
+    monthly_contribution: float = 0.0
+    currency: str = "EUR"
+    target_date: date_type | None = None
+    updated_at: datetime
+    deleted: bool = False
 
 
 class RecurringRuleSync(BaseModel):
@@ -113,6 +127,7 @@ class PushRequest(BaseModel):
     transactions: list[TransactionSync] = []
     merchants: list[MerchantSync] = []
     recurring_rules: list[RecurringRuleSync] = []
+    goals: list[GoalSync] = []
     categories: list[CategorySync] = []
     entries: list[EntrySync] = []
 
@@ -124,6 +139,7 @@ class PushResponse(BaseModel):
     transactions: list[TransactionRead] = []
     merchants: list[MerchantRead] = []
     recurring_rules: list[RecurringRuleRead] = []
+    goals: list[GoalRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime
@@ -134,6 +150,7 @@ class PullResponse(BaseModel):
     transactions: list[TransactionRead] = []
     merchants: list[MerchantRead] = []
     recurring_rules: list[RecurringRuleRead] = []
+    goals: list[GoalRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime

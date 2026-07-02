@@ -70,6 +70,11 @@ def create_app() -> FastAPI:
 
     app.include_router(bills_router)
 
+    # --- Goals ----------------------------------------------------------
+    from app.modules.goals.router import router as goals_router
+
+    app.include_router(goals_router)
+
     # --- Sync -----------------------------------------------------------
     from app.modules.sync.router import router as sync_router
 

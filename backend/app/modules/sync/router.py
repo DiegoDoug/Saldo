@@ -21,12 +21,14 @@ from app.core.db import get_session
 from app.modules.accounts.models import Account
 from app.modules.bills.models import RecurringRule
 from app.modules.budgeting.models import Category, Entry, utcnow
+from app.modules.goals.models import Goal
 from app.modules.identity.dependencies import CurrentUser
 from app.modules.merchants.models import Merchant
 from app.modules.sync.schemas import (
     AccountSync,
     CategorySync,
     EntrySync,
+    GoalSync,
     MerchantSync,
     PullResponse,
     PushRequest,
@@ -89,6 +91,46 @@ async def _upsert_account(
         existing.position = incoming.position
         existing.archived = incoming.archived
         existing.deleted = incoming.deleted
+        existing.updated_at = inc_ts
+        session.add(existing)
+    return existing
+
+
+_GOAL_FIELDS = (
+    "name",
+    "kind",
+    "target_amount",
+    "current_amount",
+    "monthly_contribution",
+    "currency",
+    "target_date",
+    "deleted",
+)
+
+
+async def _upsert_goal(
+    session: AsyncSession, user_id: uuid.UUID, incoming: GoalSync
+) -> Goal:
+    existing = await session.get(Goal, incoming.id)
+    _ensure_owned(existing, user_id)
+    inc_ts = _to_naive_utc(incoming.updated_at)
+    data = incoming.model_dump()
+    data["currency"] = incoming.currency.upper()
+
+    if existing is None:
+        goal = Goal(
+            id=incoming.id,
+            user_id=user_id,
+            created_at=inc_ts,
+            updated_at=inc_ts,
+            **{k: data[k] for k in _GOAL_FIELDS},
+        )
+        session.add(goal)
+        return goal
+
+    if inc_ts >= existing.updated_at:
+        for field in _GOAL_FIELDS:
+            setattr(existing, field, data[field])
         existing.updated_at = inc_ts
         session.add(existing)
     return existing
@@ -301,17 +343,19 @@ async def push(payload: PushRequest, user: CurrentUser, session: Session):
     accounts = [await _upsert_account(session, user.id, a) for a in payload.accounts]
     merchants = [await _upsert_merchant(session, user.id, m) for m in payload.merchants]
     rules = [await _upsert_rule(session, user.id, r) for r in payload.recurring_rules]
+    goals = [await _upsert_goal(session, user.id, g) for g in payload.goals]
     transactions = [await _upsert_transaction(session, user.id, t) for t in payload.transactions]
     categories = [await _upsert_category(session, user.id, c) for c in payload.categories]
     entries = [await _upsert_entry(session, user.id, e) for e in payload.entries]
     await session.commit()
-    for record in (*accounts, *merchants, *rules, *transactions, *categories, *entries):
+    for record in (*accounts, *merchants, *rules, *goals, *transactions, *categories, *entries):
         await session.refresh(record)
     return PushResponse(
         accounts=accounts,
         transactions=transactions,
         merchants=merchants,
         recurring_rules=rules,
+        goals=goals,
         categories=categories,
         entries=entries,
         server_time=utcnow(),
@@ -323,6 +367,7 @@ async def pull(user: CurrentUser, session: Session, since: datetime | None = Non
     acc_stmt = select(Account).where(Account.user_id == user.id)
     merchant_stmt = select(Merchant).where(Merchant.user_id == user.id)
     rule_stmt = select(RecurringRule).where(RecurringRule.user_id == user.id)
+    goal_stmt = select(Goal).where(Goal.user_id == user.id)
     tx_stmt = select(Transaction).where(Transaction.user_id == user.id)
     cat_stmt = select(Category).where(Category.user_id == user.id)
     entry_stmt = select(Entry).where(Entry.user_id == user.id)
@@ -331,6 +376,7 @@ async def pull(user: CurrentUser, session: Session, since: datetime | None = Non
         acc_stmt = acc_stmt.where(Account.updated_at > cutoff)
         merchant_stmt = merchant_stmt.where(Merchant.updated_at > cutoff)
         rule_stmt = rule_stmt.where(RecurringRule.updated_at > cutoff)
+        goal_stmt = goal_stmt.where(Goal.updated_at > cutoff)
         tx_stmt = tx_stmt.where(Transaction.updated_at > cutoff)
         cat_stmt = cat_stmt.where(Category.updated_at > cutoff)
         entry_stmt = entry_stmt.where(Entry.updated_at > cutoff)
@@ -340,6 +386,7 @@ async def pull(user: CurrentUser, session: Session, since: datetime | None = Non
     accounts = list((await session.execute(acc_stmt)).scalars().all())
     merchants = list((await session.execute(merchant_stmt)).scalars().all())
     rules = list((await session.execute(rule_stmt)).scalars().all())
+    goals = list((await session.execute(goal_stmt)).scalars().all())
     transactions = list((await session.execute(tx_stmt)).scalars().all())
     categories = list((await session.execute(cat_stmt)).scalars().all())
     entries = list((await session.execute(entry_stmt)).scalars().all())
@@ -348,6 +395,7 @@ async def pull(user: CurrentUser, session: Session, since: datetime | None = Non
         transactions=transactions,
         merchants=merchants,
         recurring_rules=rules,
+        goals=goals,
         categories=categories,
         entries=entries,
         server_time=utcnow(),

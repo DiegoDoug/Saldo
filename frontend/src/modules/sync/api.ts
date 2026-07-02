@@ -4,6 +4,7 @@ import { apiRequest } from "../../shared/api/client";
 import type { WireAccount } from "../accounts/mappers";
 import type { WireRecurringRule } from "../bills/mappers";
 import type { WireCategory, WireEntry } from "../budgeting/mappers";
+import type { WireGoal } from "../goals/mappers";
 import type { WireMerchant } from "../merchants/mappers";
 import type { WireTransaction } from "../transactions/mappers";
 
@@ -12,6 +13,7 @@ interface SyncResponse {
   transactions?: WireTransaction[];
   merchants?: WireMerchant[];
   recurring_rules?: WireRecurringRule[];
+  goals?: WireGoal[];
   categories: WireCategory[];
   entries: WireEntry[];
   server_time: string;
@@ -22,6 +24,7 @@ export interface PushPayload {
   transactions?: unknown[];
   merchants?: unknown[];
   recurring_rules?: unknown[];
+  goals?: unknown[];
   categories?: unknown[];
   entries?: unknown[];
 }
@@ -34,6 +37,7 @@ export function pushSync(payload: PushPayload): Promise<SyncResponse> {
       transactions: payload.transactions ?? [],
       merchants: payload.merchants ?? [],
       recurring_rules: payload.recurring_rules ?? [],
+      goals: payload.goals ?? [],
       categories: payload.categories ?? [],
       entries: payload.entries ?? [],
     },

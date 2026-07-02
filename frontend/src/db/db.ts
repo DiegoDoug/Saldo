@@ -74,6 +74,21 @@ export interface LocalTransaction {
   deleted: 0 | 1;
 }
 
+export type GoalKind = "emergency" | "vacation" | "house" | "car" | "custom";
+
+export interface LocalGoal {
+  id: string;
+  name: string;
+  kind: GoalKind;
+  targetAmount: number;
+  currentAmount: number;
+  monthlyContribution: number;
+  currency: string;
+  targetDate: string | null;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
 export type Frequency = "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
 
 export interface LocalRecurringRule {
@@ -149,6 +164,7 @@ export class SaldoDB extends Dexie {
   transactions!: Table<LocalTransaction, string>;
   merchants!: Table<LocalMerchant, string>;
   recurringRules!: Table<LocalRecurringRule, string>;
+  goals!: Table<LocalGoal, string>;
 
   constructor() {
     super("saldo");
@@ -175,6 +191,10 @@ export class SaldoDB extends Dexie {
     // v5 adds recurring rules / bills (additive upgrade).
     this.version(5).stores({
       recurringRules: "id, accountId, frequency, nextRun, deleted, updatedAt",
+    });
+    // v6 adds savings goals (additive upgrade).
+    this.version(6).stores({
+      goals: "id, kind, deleted, updatedAt",
     });
   }
 }
