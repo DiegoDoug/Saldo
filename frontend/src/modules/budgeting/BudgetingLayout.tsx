@@ -1,28 +1,15 @@
 /** App shell for the budgeting views: sticky header (brand, year switch,
  * logout) and a bottom nav, with the active view rendered via <Outlet />. */
 
-import {
-  BarChart3,
-  CalendarClock,
-  ChevronLeft,
-  ChevronRight,
-  Home,
-  Landmark,
-  LogOut,
-  PieChart,
-  PiggyBank,
-  Receipt,
-  Scale,
-  Store,
-  Target,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, PiggyBank } from "lucide-react";
 import { useEffect } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 
 import { useLayout } from "../dashboard/layoutRepo";
 import { useLogout } from "../identity/hooks";
 import { PwaUpdatePrompt } from "../sync/PwaUpdatePrompt";
 import { SyncStatusBar } from "../sync/SyncStatusBar";
+import { AppNav } from "./AppNav";
 import { useBudgetingUi } from "./uiStore";
 
 export function BudgetingLayout() {
@@ -89,44 +76,7 @@ export function BudgetingLayout() {
 
       <PwaUpdatePrompt />
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-center gap-1 overflow-x-auto border-t border-line bg-card/95 p-2 backdrop-blur">
-        <BottomLink to="/" icon={<Home size={20} />} label="Inicio" end />
-        <BottomLink to="/transactions" icon={<Receipt size={20} />} label="Movimientos" />
-        <BottomLink to="/accounts" icon={<Landmark size={20} />} label="Cuentas" />
-        <BottomLink to="/bills" icon={<CalendarClock size={20} />} label="Recibos" />
-        <BottomLink to="/goals" icon={<Target size={20} />} label="Metas" />
-        <BottomLink to="/net-worth" icon={<Scale size={20} />} label="Patrimonio" />
-        <BottomLink to="/reports" icon={<BarChart3 size={20} />} label="Informes" />
-        <BottomLink to="/merchants" icon={<Store size={20} />} label="Comercios" />
-        <BottomLink to="/year" icon={<PieChart size={20} />} label="Año" />
-      </nav>
+      <AppNav />
     </div>
-  );
-}
-
-function BottomLink({
-  to,
-  icon,
-  label,
-  end,
-}: {
-  to: string;
-  icon: React.ReactNode;
-  label: string;
-  end?: boolean;
-}) {
-  return (
-    <NavLink
-      to={to}
-      end={end}
-      className={({ isActive }) =>
-        `flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
-          isActive ? "bg-mint-soft/60 text-mint" : "text-ink-soft"
-        }`
-      }
-    >
-      {icon}
-      <span>{label}</span>
-    </NavLink>
   );
 }
