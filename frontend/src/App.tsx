@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { AccountsPage } from "./modules/accounts/AccountsPage";
 import { BudgetingLayout } from "./modules/budgeting/BudgetingLayout";
 import { MonthView } from "./modules/budgeting/MonthView";
 import { YearView } from "./modules/budgeting/YearView";
 import { DashboardPage } from "./modules/dashboard/DashboardPage";
+import { TransactionsPage } from "./modules/transactions/TransactionsPage";
 import { LoginPage } from "./modules/identity/LoginPage";
 import { RegisterPage } from "./modules/identity/RegisterPage";
 import { SyncProvider } from "./modules/sync/SyncProvider";
@@ -26,6 +28,8 @@ export function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/month/:month" element={<MonthView />} />
         <Route path="/year" element={<YearView />} />
+        <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/transactions" element={<TransactionsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

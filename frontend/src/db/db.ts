@@ -33,6 +33,47 @@ export interface LocalEntry {
   deleted: 0 | 1;
 }
 
+export type AccountType =
+  | "checking"
+  | "savings"
+  | "cash"
+  | "credit_card"
+  | "investment"
+  | "crypto";
+
+export interface LocalAccount {
+  id: string;
+  name: string;
+  type: AccountType;
+  currency: string;
+  openingBalance: number;
+  color: string;
+  icon: string;
+  position: number;
+  archived: 0 | 1; // Dexie can't index booleans
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
+export type TransactionType = "income" | "expense" | "transfer";
+
+export interface LocalTransaction {
+  id: string;
+  type: TransactionType;
+  amount: number; // positive magnitude; sign derives from `type`
+  currency: string;
+  accountId: string;
+  transferAccountId: string | null;
+  merchantId: string | null;
+  recurringId: string | null;
+  categoryId: string | null;
+  date: string; // ISO date (YYYY-MM-DD)
+  notes: string;
+  tags: string[];
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
 /** Mirror of the authenticated User (one row: the current profile). */
 export interface LocalProfile {
   id: string;
@@ -68,6 +109,8 @@ export class SaldoDB extends Dexie {
   profile!: Table<LocalProfile, string>;
   meta!: Table<LocalMeta, string>;
   layout!: Table<LocalLayout, string>;
+  accounts!: Table<LocalAccount, string>;
+  transactions!: Table<LocalTransaction, string>;
 
   constructor() {
     super("saldo");
@@ -79,6 +122,13 @@ export class SaldoDB extends Dexie {
     });
     this.version(2).stores({
       layout: "id",
+    });
+    // v3 adds the finance tables. Additive upgrade — existing object stores and
+    // their data are preserved.
+    this.version(3).stores({
+      accounts: "id, type, archived, deleted, updatedAt, position",
+      transactions:
+        "id, accountId, transferAccountId, type, categoryId, merchantId, date, deleted, updatedAt",
     });
   }
 }

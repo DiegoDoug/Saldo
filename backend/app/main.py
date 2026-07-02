@@ -50,6 +50,16 @@ def create_app() -> FastAPI:
 
     app.include_router(budgeting_router)
 
+    # --- Accounts -------------------------------------------------------
+    from app.modules.accounts.router import router as accounts_router
+
+    app.include_router(accounts_router)
+
+    # --- Transactions ---------------------------------------------------
+    from app.modules.transactions.router import router as transactions_router
+
+    app.include_router(transactions_router)
+
     # --- Sync -----------------------------------------------------------
     from app.modules.sync.router import router as sync_router
 
