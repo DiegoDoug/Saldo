@@ -3,6 +3,7 @@
 
 import {
   BarChart3,
+  CalendarClock,
   ChevronLeft,
   ChevronRight,
   Home,
@@ -89,6 +90,7 @@ export function BudgetingLayout() {
         <BottomLink to="/" icon={<Home size={20} />} label="Inicio" end />
         <BottomLink to="/transactions" icon={<Receipt size={20} />} label="Movimientos" />
         <BottomLink to="/accounts" icon={<Landmark size={20} />} label="Cuentas" />
+        <BottomLink to="/bills" icon={<CalendarClock size={20} />} label="Recibos" />
         <BottomLink to="/merchants" icon={<Store size={20} />} label="Comercios" />
         <BottomLink to="/year" icon={<BarChart3 size={20} />} label="Año" />
       </nav>

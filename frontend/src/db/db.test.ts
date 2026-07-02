@@ -13,6 +13,7 @@ describe("Dexie schema", () => {
       "merchants",
       "meta",
       "profile",
+      "recurringRules",
       "transactions",
     ]);
   });

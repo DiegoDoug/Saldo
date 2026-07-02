@@ -19,6 +19,7 @@ import {
   type LocalCategory,
   type LocalEntry,
   type LocalMerchant,
+  type LocalRecurringRule,
   type LocalTransaction,
 } from "../../db/db";
 import {
@@ -26,6 +27,11 @@ import {
   wireToLocalAccount,
   type WireAccount,
 } from "../accounts/mappers";
+import {
+  localRuleToSync,
+  wireToLocalRule,
+  type WireRecurringRule,
+} from "../bills/mappers";
 import {
   localMerchantToSync,
   wireToLocalMerchant,
@@ -113,8 +119,24 @@ async function mergeMerchants(incoming: WireMerchant[] = []): Promise<void> {
   }
 }
 
+async function mergeRules(incoming: WireRecurringRule[] = []): Promise<void> {
+  for (const wr of incoming) {
+    const local = await db.recurringRules.get(wr.id);
+    const next = wireToLocalRule(wr);
+    if (!local || toEpoch(next.updatedAt) >= toEpoch(local.updatedAt)) {
+      await db.recurringRules.put(next);
+    }
+  }
+}
+
 function changedSince<
-  T extends LocalAccount | LocalCategory | LocalEntry | LocalTransaction | LocalMerchant,
+  T extends
+    | LocalAccount
+    | LocalCategory
+    | LocalEntry
+    | LocalTransaction
+    | LocalMerchant
+    | LocalRecurringRule,
 >(rows: T[], since?: string): T[] {
   if (!since) return rows;
   const cutoff = toEpoch(since);
@@ -171,6 +193,7 @@ async function doSync(): Promise<boolean> {
     const dirtyMerchants = changedSince(await db.merchants.toArray(), since).map(
       localMerchantToSync,
     );
+    const dirtyRules = changedSince(await db.recurringRules.toArray(), since).map(localRuleToSync);
     const dirtyTransactions = changedSince(await db.transactions.toArray(), since).map(
       localTransactionToSync,
     );
@@ -182,6 +205,7 @@ async function doSync(): Promise<boolean> {
     if (
       dirtyAccounts.length ||
       dirtyMerchants.length ||
+      dirtyRules.length ||
       dirtyTransactions.length ||
       dirtyCategories.length ||
       dirtyEntries.length
@@ -189,6 +213,7 @@ async function doSync(): Promise<boolean> {
       const pushed = await pushSync({
         accounts: dirtyAccounts,
         merchants: dirtyMerchants,
+        recurring_rules: dirtyRules,
         transactions: dirtyTransactions,
         categories: dirtyCategories,
         entries: dirtyEntries,
@@ -196,12 +221,14 @@ async function doSync(): Promise<boolean> {
       const conflicts =
         countConflicts(dirtyAccounts, pushed.accounts ?? []) +
         countConflicts(dirtyMerchants, pushed.merchants ?? []) +
+        countConflicts(dirtyRules, pushed.recurring_rules ?? []) +
         countConflicts(dirtyTransactions, pushed.transactions ?? []) +
         countConflicts(dirtyCategories, pushed.categories) +
         countConflicts(dirtyEntries, pushed.entries);
       if (conflicts > 0) store.addConflicts(conflicts);
       await mergeAccounts(pushed.accounts);
       await mergeMerchants(pushed.merchants);
+      await mergeRules(pushed.recurring_rules);
       await mergeTransactions(pushed.transactions);
       await mergeCategories(pushed.categories);
       await mergeEntries(pushed.entries);
@@ -210,6 +237,7 @@ async function doSync(): Promise<boolean> {
     const pulled = await pullSync(since);
     await mergeAccounts(pulled.accounts);
     await mergeMerchants(pulled.merchants);
+    await mergeRules(pulled.recurring_rules);
     await mergeTransactions(pulled.transactions);
     await mergeCategories(pulled.categories);
     await mergeEntries(pulled.entries);

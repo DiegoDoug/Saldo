@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AccountsPage } from "./modules/accounts/AccountsPage";
+import { BillsPage } from "./modules/bills/BillsPage";
 import { BudgetingLayout } from "./modules/budgeting/BudgetingLayout";
 import { MonthView } from "./modules/budgeting/MonthView";
 import { YearView } from "./modules/budgeting/YearView";
@@ -32,6 +33,7 @@ export function App() {
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/merchants" element={<MerchantsPage />} />
+        <Route path="/bills" element={<BillsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

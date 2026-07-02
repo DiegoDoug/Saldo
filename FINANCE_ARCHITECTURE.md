@@ -79,7 +79,7 @@ updated_at, deleted`):
 | `account` ✅ | `name, type, currency, opening_balance, color, icon, archived, position` | `type ∈ checking, savings, cash, credit_card, investment, crypto`. Balance = opening + Σ signed transactions. |
 | `transaction` ✅ | `type, amount, currency, account_id, transfer_account_id, merchant_id, category_id, date, notes, tags, recurring_id` | `type ∈ income, expense, transfer`. `transfer_account_id` set only for transfers. `tags` is JSON array of strings. |
 | `merchant` ✅ | `name, logo, color, category_id, website, location, recurring_probability` | Transactions reference a merchant instead of free text. |
-| `recurring_rule` ⬜ | `template (amount/type/account/category/merchant), frequency, interval, start_date, end_date, next_run` | `frequency ∈ daily, weekly, biweekly, monthly, quarterly, yearly`. Materializes future `transaction` rows. |
+| `recurring_rule` ✅ | `template (amount/type/account/category/merchant), frequency, interval, start_date, end_date, next_run` | `frequency ∈ daily, weekly, biweekly, monthly, quarterly, yearly`. Materializes future `transaction` rows with deterministic per-occurrence ids (sync-dedup). |
 | `goal` ⬜ | `name, kind, target_amount, current_amount, monthly_contribution, currency, target_date` | `kind ∈ emergency, vacation, house, car, custom`. Completion date computed in domain core. |
 | `asset` ⬜ | `name, kind, value, currency` | Feeds net worth. |
 | `liability` ⬜ | `name, kind, balance, currency, interest_rate` | Feeds net worth. |
@@ -121,7 +121,7 @@ Transactions    ✅
   POST   /transactions/transfer         (atomic paired transfer helper)
 
 Merchants       ✅  CRUD + GET /merchants/{id}/stats
-Recurring/Bills ⬜  CRUD + GET /bills/upcoming?days=  + POST /recurring/{id}/materialize
+Recurring/Bills ✅  CRUD + GET /bills/upcoming?days=  + POST /recurring/{id}/materialize
 Goals           ⬜  CRUD + GET /goals/{id}/projection
 Net worth       ⬜  assets CRUD, liabilities CRUD, GET /net-worth, GET /net-worth/history
 Reports         ⬜  GET /reports/{spending-trends,income-trends,by-merchant,by-category,
@@ -139,7 +139,7 @@ under the same authenticated `SyncProvider` shell:
 /               Dashboard (expanded with widgets)      (existing, extended)
 /transactions   Transactions list + filters + bulk     ✅
 /accounts       Accounts + balances                    ✅
-/bills          Upcoming bills + calendar              ⬜
+/bills          Upcoming bills + calendar              ✅
 /goals          Goals                                  ⬜
 /net-worth      Net worth + allocation                 ⬜
 /reports        Analytics                              ⬜
@@ -175,7 +175,7 @@ palette, keyboard shortcuts, contextual menus, mobile gestures.
 2. ✅ **Transactions** — the primary financial data source (CRUD, filters,
    search, sort, pagination, bulk, transfers).
 3. ✅ **Merchants** — richer transaction descriptions.
-4. 🚧 **Recurring / Bills** — materialize future transactions, upcoming page.
+4. ✅ **Recurring / Bills** — materialize future transactions, upcoming page.
 5. ⬜ **Goals**.
 6. ⬜ **Assets / Liabilities / Net worth**.
 7. ⬜ **Forecasting** (depends on recurring + history).

@@ -13,9 +13,31 @@ from typing import Literal
 from pydantic import BaseModel
 
 from app.modules.accounts.schemas import AccountRead
+from app.modules.bills.schemas import RecurringRuleRead
 from app.modules.budgeting.schemas import CategoryRead, EntryRead
 from app.modules.merchants.schemas import MerchantRead
 from app.modules.transactions.schemas import TransactionRead
+
+
+class RecurringRuleSync(BaseModel):
+    id: uuid.UUID
+    name: str
+    type: Literal["income", "expense", "transfer"]
+    amount: float = 0.0
+    currency: str = "EUR"
+    account_id: uuid.UUID
+    transfer_account_id: uuid.UUID | None = None
+    merchant_id: uuid.UUID | None = None
+    category_id: uuid.UUID | None = None
+    notes: str = ""
+    frequency: Literal["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"]
+    interval: int = 1
+    start_date: date_type
+    end_date: date_type | None = None
+    next_run: date_type
+    auto_generate: bool = True
+    updated_at: datetime
+    deleted: bool = False
 
 
 class MerchantSync(BaseModel):
@@ -90,6 +112,7 @@ class PushRequest(BaseModel):
     accounts: list[AccountSync] = []
     transactions: list[TransactionSync] = []
     merchants: list[MerchantSync] = []
+    recurring_rules: list[RecurringRuleSync] = []
     categories: list[CategorySync] = []
     entries: list[EntrySync] = []
 
@@ -100,6 +123,7 @@ class PushResponse(BaseModel):
     accounts: list[AccountRead] = []
     transactions: list[TransactionRead] = []
     merchants: list[MerchantRead] = []
+    recurring_rules: list[RecurringRuleRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime
@@ -109,6 +133,7 @@ class PullResponse(BaseModel):
     accounts: list[AccountRead] = []
     transactions: list[TransactionRead] = []
     merchants: list[MerchantRead] = []
+    recurring_rules: list[RecurringRuleRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime

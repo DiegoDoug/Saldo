@@ -74,6 +74,29 @@ export interface LocalTransaction {
   deleted: 0 | 1;
 }
 
+export type Frequency = "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+
+export interface LocalRecurringRule {
+  id: string;
+  name: string;
+  type: TransactionType;
+  amount: number;
+  currency: string;
+  accountId: string;
+  transferAccountId: string | null;
+  merchantId: string | null;
+  categoryId: string | null;
+  notes: string;
+  frequency: Frequency;
+  interval: number;
+  startDate: string; // ISO date
+  endDate: string | null;
+  nextRun: string; // ISO date cursor
+  autoGenerate: 0 | 1;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
 export interface LocalMerchant {
   id: string;
   name: string;
@@ -125,6 +148,7 @@ export class SaldoDB extends Dexie {
   accounts!: Table<LocalAccount, string>;
   transactions!: Table<LocalTransaction, string>;
   merchants!: Table<LocalMerchant, string>;
+  recurringRules!: Table<LocalRecurringRule, string>;
 
   constructor() {
     super("saldo");
@@ -147,6 +171,10 @@ export class SaldoDB extends Dexie {
     // v4 adds merchants (additive upgrade).
     this.version(4).stores({
       merchants: "id, name, categoryId, deleted, updatedAt",
+    });
+    // v5 adds recurring rules / bills (additive upgrade).
+    this.version(5).stores({
+      recurringRules: "id, accountId, frequency, nextRun, deleted, updatedAt",
     });
   }
 }
