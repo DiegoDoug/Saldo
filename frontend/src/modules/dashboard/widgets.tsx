@@ -29,6 +29,7 @@ import type { MonthResult, YearResult } from "../../shared/domain/budgeting";
 import { formatMoney } from "../../shared/format";
 import { C, MONTHS } from "../../shared/theme";
 import { savingsRatePct } from "../budgeting/summary";
+import { FINANCE_WIDGETS } from "./financeWidgets";
 
 export interface WidgetProps {
   year: number;
@@ -244,10 +245,13 @@ function Stat({
   );
 }
 
+// Finance widgets first (the app's primary data), then the budgeting widgets.
+// Existing users keep their saved order; `resolveLayout` appends any new ids.
 export const WIDGET_CATALOG: WidgetDef[] = [
+  ...FINANCE_WIDGETS,
   { id: "hero", title: "Resumen del año", render: (p) => <HeroWidget {...p} /> },
   { id: "stats", title: "Estadísticas rápidas", render: (p) => <StatsWidget {...p} /> },
-  { id: "savingsRate", title: "Tasa de ahorro", render: (p) => <SavingsRateWidget {...p} /> },
+  { id: "savingsRate", title: "Tasa de ahorro (año)", render: (p) => <SavingsRateWidget {...p} /> },
   { id: "trend", title: "Evolución mensual", render: (p) => <TrendWidget {...p} /> },
   { id: "months", title: "Meses", render: (p) => <MonthsWidget {...p} /> },
 ];
