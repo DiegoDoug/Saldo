@@ -1,18 +1,29 @@
+import { Loader2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { PasswordField } from "../../shared/ui/PasswordField";
+import { TextField } from "../../shared/ui/TextField";
 import { AuthLayout } from "./AuthLayout";
 import { registerErrorMessage } from "./authErrors";
 import { PostRegisterLoginError, useRegister } from "./hooks";
+import { MIN_PASSWORD_LENGTH, validateEmail, validatePassword } from "./validation";
 
 export function RegisterPage() {
   const navigate = useNavigate();
   const registerMutation = useRegister();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [touched, setTouched] = useState({ email: false, password: false });
+
+  const emailError = validateEmail(email);
+  const passwordError = validatePassword(password, { min: MIN_PASSWORD_LENGTH });
+  const formValid = !emailError && !passwordError;
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
+    setTouched({ email: true, password: true });
+    if (!formValid || registerMutation.isPending) return;
     registerMutation.mutate(
       { email, password },
       {
@@ -28,50 +39,64 @@ export function RegisterPage() {
     );
   }
 
+  const showError =
+    registerMutation.isError && !(registerMutation.error instanceof PostRegisterLoginError);
+
   return (
     <AuthLayout
       title="Crea tu cuenta"
       subtitle="Tu presupuesto, en tu propio servidor."
       footer={
         <>
-          ¿Ya tienes cuenta? <Link className="font-semibold text-mint" to="/login">Inicia sesión</Link>
+          ¿Ya tienes cuenta?{" "}
+          <Link
+            className="rounded font-semibold text-mint hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint-soft"
+            to="/login"
+          >
+            Inicia sesión
+          </Link>
         </>
       }
     >
-      <form className="flex flex-col gap-3" onSubmit={onSubmit}>
-        <label className="text-sm font-medium">
-          Correo
-          <input
-            className="field-input mt-1"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </label>
-        <label className="text-sm font-medium">
-          Contraseña
-          <input
-            className="field-input mt-1"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
+      <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+        <TextField
+          label="Correo"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          autoFocus
+          aria-required="true"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+          error={touched.email ? emailError : null}
+        />
+        <PasswordField
+          label="Contraseña"
+          autoComplete="new-password"
+          aria-required="true"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+          error={touched.password ? passwordError : null}
+          hint={`Usa al menos ${MIN_PASSWORD_LENGTH} caracteres.`}
+        />
 
-        {registerMutation.isError &&
-          !(registerMutation.error instanceof PostRegisterLoginError) && (
-            <p className="text-sm text-coral" role="alert">
-              {registerErrorMessage(registerMutation.error)}
-            </p>
+        {showError && (
+          <p className="rounded-xl bg-coral-soft px-3 py-2 text-sm text-coral" role="alert">
+            {registerErrorMessage(registerMutation.error)}
+          </p>
+        )}
+
+        <button className="btn-primary mt-1 w-full" type="submit" disabled={registerMutation.isPending}>
+          {registerMutation.isPending ? (
+            <>
+              <Loader2 className="animate-spin" size={18} aria-hidden="true" />
+              Creando…
+            </>
+          ) : (
+            "Crear cuenta"
           )}
-
-        <button className="btn-primary mt-2" type="submit" disabled={registerMutation.isPending}>
-          {registerMutation.isPending ? "Creando…" : "Crear cuenta"}
         </button>
       </form>
     </AuthLayout>
