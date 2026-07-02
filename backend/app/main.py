@@ -75,6 +75,11 @@ def create_app() -> FastAPI:
 
     app.include_router(goals_router)
 
+    # --- Net worth (assets, liabilities, snapshots) ---------------------
+    from app.modules.networth.router import router as networth_router
+
+    app.include_router(networth_router)
+
     # --- Sync -----------------------------------------------------------
     from app.modules.sync.router import router as sync_router
 

@@ -18,8 +18,11 @@ import {
   type LocalAccount,
   type LocalCategory,
   type LocalEntry,
+  type LocalAsset,
   type LocalGoal,
+  type LocalLiability,
   type LocalMerchant,
+  type LocalNetWorthSnapshot,
   type LocalRecurringRule,
   type LocalTransaction,
 } from "../../db/db";
@@ -34,6 +37,17 @@ import {
   type WireRecurringRule,
 } from "../bills/mappers";
 import { localGoalToSync, wireToLocalGoal, type WireGoal } from "../goals/mappers";
+import {
+  localAssetToSync,
+  localLiabilityToSync,
+  localSnapshotToSync,
+  wireToLocalAsset,
+  wireToLocalLiability,
+  wireToLocalSnapshot,
+  type WireAsset,
+  type WireLiability,
+  type WireSnapshot,
+} from "../networth/mappers";
 import {
   localMerchantToSync,
   wireToLocalMerchant,
@@ -141,6 +155,36 @@ async function mergeGoals(incoming: WireGoal[] = []): Promise<void> {
   }
 }
 
+async function mergeAssets(incoming: WireAsset[] = []): Promise<void> {
+  for (const wa of incoming) {
+    const local = await db.assets.get(wa.id);
+    const next = wireToLocalAsset(wa);
+    if (!local || toEpoch(next.updatedAt) >= toEpoch(local.updatedAt)) {
+      await db.assets.put(next);
+    }
+  }
+}
+
+async function mergeLiabilities(incoming: WireLiability[] = []): Promise<void> {
+  for (const wl of incoming) {
+    const local = await db.liabilities.get(wl.id);
+    const next = wireToLocalLiability(wl);
+    if (!local || toEpoch(next.updatedAt) >= toEpoch(local.updatedAt)) {
+      await db.liabilities.put(next);
+    }
+  }
+}
+
+async function mergeSnapshots(incoming: WireSnapshot[] = []): Promise<void> {
+  for (const ws of incoming) {
+    const local = await db.netWorthSnapshots.get(ws.id);
+    const next = wireToLocalSnapshot(ws);
+    if (!local || toEpoch(next.updatedAt) >= toEpoch(local.updatedAt)) {
+      await db.netWorthSnapshots.put(next);
+    }
+  }
+}
+
 function changedSince<
   T extends
     | LocalAccount
@@ -149,7 +193,10 @@ function changedSince<
     | LocalTransaction
     | LocalMerchant
     | LocalRecurringRule
-    | LocalGoal,
+    | LocalGoal
+    | LocalAsset
+    | LocalLiability
+    | LocalNetWorthSnapshot,
 >(rows: T[], since?: string): T[] {
   if (!since) return rows;
   const cutoff = toEpoch(since);
@@ -208,6 +255,13 @@ async function doSync(): Promise<boolean> {
     );
     const dirtyRules = changedSince(await db.recurringRules.toArray(), since).map(localRuleToSync);
     const dirtyGoals = changedSince(await db.goals.toArray(), since).map(localGoalToSync);
+    const dirtyAssets = changedSince(await db.assets.toArray(), since).map(localAssetToSync);
+    const dirtyLiabilities = changedSince(await db.liabilities.toArray(), since).map(
+      localLiabilityToSync,
+    );
+    const dirtySnapshots = changedSince(await db.netWorthSnapshots.toArray(), since).map(
+      localSnapshotToSync,
+    );
     const dirtyTransactions = changedSince(await db.transactions.toArray(), since).map(
       localTransactionToSync,
     );
@@ -221,6 +275,9 @@ async function doSync(): Promise<boolean> {
       dirtyMerchants.length ||
       dirtyRules.length ||
       dirtyGoals.length ||
+      dirtyAssets.length ||
+      dirtyLiabilities.length ||
+      dirtySnapshots.length ||
       dirtyTransactions.length ||
       dirtyCategories.length ||
       dirtyEntries.length
@@ -230,6 +287,9 @@ async function doSync(): Promise<boolean> {
         merchants: dirtyMerchants,
         recurring_rules: dirtyRules,
         goals: dirtyGoals,
+        assets: dirtyAssets,
+        liabilities: dirtyLiabilities,
+        snapshots: dirtySnapshots,
         transactions: dirtyTransactions,
         categories: dirtyCategories,
         entries: dirtyEntries,
@@ -239,6 +299,9 @@ async function doSync(): Promise<boolean> {
         countConflicts(dirtyMerchants, pushed.merchants ?? []) +
         countConflicts(dirtyRules, pushed.recurring_rules ?? []) +
         countConflicts(dirtyGoals, pushed.goals ?? []) +
+        countConflicts(dirtyAssets, pushed.assets ?? []) +
+        countConflicts(dirtyLiabilities, pushed.liabilities ?? []) +
+        countConflicts(dirtySnapshots, pushed.snapshots ?? []) +
         countConflicts(dirtyTransactions, pushed.transactions ?? []) +
         countConflicts(dirtyCategories, pushed.categories) +
         countConflicts(dirtyEntries, pushed.entries);
@@ -247,6 +310,9 @@ async function doSync(): Promise<boolean> {
       await mergeMerchants(pushed.merchants);
       await mergeRules(pushed.recurring_rules);
       await mergeGoals(pushed.goals);
+      await mergeAssets(pushed.assets);
+      await mergeLiabilities(pushed.liabilities);
+      await mergeSnapshots(pushed.snapshots);
       await mergeTransactions(pushed.transactions);
       await mergeCategories(pushed.categories);
       await mergeEntries(pushed.entries);
@@ -257,6 +323,9 @@ async function doSync(): Promise<boolean> {
     await mergeMerchants(pulled.merchants);
     await mergeRules(pulled.recurring_rules);
     await mergeGoals(pulled.goals);
+    await mergeAssets(pulled.assets);
+    await mergeLiabilities(pulled.liabilities);
+    await mergeSnapshots(pulled.snapshots);
     await mergeTransactions(pulled.transactions);
     await mergeCategories(pulled.categories);
     await mergeEntries(pulled.entries);

@@ -74,6 +74,42 @@ export interface LocalTransaction {
   deleted: 0 | 1;
 }
 
+export type AssetKind = "cash" | "property" | "vehicle" | "investment" | "crypto" | "other";
+
+export interface LocalAsset {
+  id: string;
+  name: string;
+  kind: AssetKind;
+  value: number;
+  currency: string;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
+export type LiabilityKind = "mortgage" | "loan" | "credit_card" | "student" | "other";
+
+export interface LocalLiability {
+  id: string;
+  name: string;
+  kind: LiabilityKind;
+  balance: number;
+  currency: string;
+  interestRate: number;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
+export interface LocalNetWorthSnapshot {
+  id: string;
+  date: string; // ISO date (one per day)
+  assetsTotal: number;
+  liabilitiesTotal: number;
+  netWorth: number;
+  currency: string;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
 export type GoalKind = "emergency" | "vacation" | "house" | "car" | "custom";
 
 export interface LocalGoal {
@@ -165,6 +201,9 @@ export class SaldoDB extends Dexie {
   merchants!: Table<LocalMerchant, string>;
   recurringRules!: Table<LocalRecurringRule, string>;
   goals!: Table<LocalGoal, string>;
+  assets!: Table<LocalAsset, string>;
+  liabilities!: Table<LocalLiability, string>;
+  netWorthSnapshots!: Table<LocalNetWorthSnapshot, string>;
 
   constructor() {
     super("saldo");
@@ -195,6 +234,12 @@ export class SaldoDB extends Dexie {
     // v6 adds savings goals (additive upgrade).
     this.version(6).stores({
       goals: "id, kind, deleted, updatedAt",
+    });
+    // v7 adds net worth (assets, liabilities, snapshots) (additive upgrade).
+    this.version(7).stores({
+      assets: "id, kind, deleted, updatedAt",
+      liabilities: "id, kind, deleted, updatedAt",
+      netWorthSnapshots: "id, date, deleted, updatedAt",
     });
   }
 }

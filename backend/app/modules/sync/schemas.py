@@ -17,7 +17,40 @@ from app.modules.bills.schemas import RecurringRuleRead
 from app.modules.budgeting.schemas import CategoryRead, EntryRead
 from app.modules.goals.schemas import GoalRead
 from app.modules.merchants.schemas import MerchantRead
+from app.modules.networth.schemas import AssetRead, LiabilityRead, SnapshotRead
 from app.modules.transactions.schemas import TransactionRead
+
+
+class AssetSync(BaseModel):
+    id: uuid.UUID
+    name: str
+    kind: Literal["cash", "property", "vehicle", "investment", "crypto", "other"]
+    value: float = 0.0
+    currency: str = "EUR"
+    updated_at: datetime
+    deleted: bool = False
+
+
+class LiabilitySync(BaseModel):
+    id: uuid.UUID
+    name: str
+    kind: Literal["mortgage", "loan", "credit_card", "student", "other"]
+    balance: float = 0.0
+    currency: str = "EUR"
+    interest_rate: float = 0.0
+    updated_at: datetime
+    deleted: bool = False
+
+
+class SnapshotSync(BaseModel):
+    id: uuid.UUID
+    date: date_type
+    assets_total: float = 0.0
+    liabilities_total: float = 0.0
+    net_worth: float = 0.0
+    currency: str = "EUR"
+    updated_at: datetime
+    deleted: bool = False
 
 
 class GoalSync(BaseModel):
@@ -128,6 +161,9 @@ class PushRequest(BaseModel):
     merchants: list[MerchantSync] = []
     recurring_rules: list[RecurringRuleSync] = []
     goals: list[GoalSync] = []
+    assets: list[AssetSync] = []
+    liabilities: list[LiabilitySync] = []
+    snapshots: list[SnapshotSync] = []
     categories: list[CategorySync] = []
     entries: list[EntrySync] = []
 
@@ -140,6 +176,9 @@ class PushResponse(BaseModel):
     merchants: list[MerchantRead] = []
     recurring_rules: list[RecurringRuleRead] = []
     goals: list[GoalRead] = []
+    assets: list[AssetRead] = []
+    liabilities: list[LiabilityRead] = []
+    snapshots: list[SnapshotRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime
@@ -151,6 +190,9 @@ class PullResponse(BaseModel):
     merchants: list[MerchantRead] = []
     recurring_rules: list[RecurringRuleRead] = []
     goals: list[GoalRead] = []
+    assets: list[AssetRead] = []
+    liabilities: list[LiabilityRead] = []
+    snapshots: list[SnapshotRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime

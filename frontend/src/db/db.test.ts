@@ -7,12 +7,15 @@ describe("Dexie schema", () => {
     const tableNames = db.tables.map((t) => t.name).sort();
     expect(tableNames).toEqual([
       "accounts",
+      "assets",
       "categories",
       "entries",
       "goals",
       "layout",
+      "liabilities",
       "merchants",
       "meta",
+      "netWorthSnapshots",
       "profile",
       "recurringRules",
       "transactions",

@@ -18,6 +18,7 @@ from app.modules.goals import models as _goals  # noqa: F401
 from app.modules.identity import models as _identity  # noqa: F401
 from app.modules.layout import models as _layout  # noqa: F401
 from app.modules.merchants import models as _merchants  # noqa: F401
+from app.modules.networth import models as _networth  # noqa: F401
 from app.modules.transactions import models as _transactions  # noqa: F401
 
 metadata = SQLModel.metadata

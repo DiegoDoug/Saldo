@@ -11,6 +11,7 @@ import {
   LogOut,
   PiggyBank,
   Receipt,
+  Scale,
   Store,
   Target,
 } from "lucide-react";
@@ -93,6 +94,7 @@ export function BudgetingLayout() {
         <BottomLink to="/accounts" icon={<Landmark size={20} />} label="Cuentas" />
         <BottomLink to="/bills" icon={<CalendarClock size={20} />} label="Recibos" />
         <BottomLink to="/goals" icon={<Target size={20} />} label="Metas" />
+        <BottomLink to="/net-worth" icon={<Scale size={20} />} label="Patrimonio" />
         <BottomLink to="/merchants" icon={<Store size={20} />} label="Comercios" />
         <BottomLink to="/year" icon={<BarChart3 size={20} />} label="Año" />
       </nav>
