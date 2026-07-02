@@ -22,11 +22,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Check, Eye, EyeOff, GripVertical, SlidersHorizontal } from "lucide-react";
+import { Check, Eye, EyeOff, GripVertical, SlidersHorizontal, Wallet } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import type { LayoutData } from "../../db/db";
+import { EmptyState } from "../../shared/ui/EmptyState";
 import { useYearResult } from "../budgeting/hooks";
+import { isYearEmpty } from "../budgeting/summary";
 import { useBudgetingUi } from "../budgeting/uiStore";
 import { runLayoutSync } from "./layoutSync";
 import { THEMES, saveLayout, useLayout } from "./layoutRepo";
@@ -37,6 +40,7 @@ export function DashboardPage() {
   const calc = useYearResult(year);
   const layout = useLayout();
   const [editing, setEditing] = useState(false);
+  const empty = isYearEmpty(calc);
 
   async function persist(next: LayoutData) {
     await saveLayout(next);
@@ -47,19 +51,27 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-end">
-        <button
-          className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-semibold transition ${
-            editing ? "border-mint bg-mint text-white" : "border-line bg-card text-ink-soft"
-          }`}
-          onClick={() => setEditing((e) => !e)}
-        >
-          {editing ? <Check size={16} /> : <SlidersHorizontal size={16} />}
-          {editing ? "Listo" : "Personalizar"}
-        </button>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="font-display text-lg font-semibold">
+          {editing ? "Personalizar panel" : "Tu panel"}
+        </h1>
+        {!empty && (
+          <button
+            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint focus-visible:ring-offset-2 ${
+              editing ? "border-mint bg-mint text-white" : "border-line bg-card text-ink-soft"
+            }`}
+            aria-pressed={editing}
+            onClick={() => setEditing((e) => !e)}
+          >
+            {editing ? <Check size={16} /> : <SlidersHorizontal size={16} />}
+            {editing ? "Listo" : "Personalizar"}
+          </button>
+        )}
       </div>
 
-      {editing ? (
+      {empty ? (
+        <DashboardEmpty year={year} />
+      ) : editing ? (
         <EditPanel layout={layout} onChange={persist} />
       ) : (
         visible.map((id) => {
@@ -68,6 +80,24 @@ export function DashboardPage() {
         })
       )}
     </div>
+  );
+}
+
+function DashboardEmpty({ year }: { year: number }) {
+  const navigate = useNavigate();
+  const now = new Date();
+  const startMonth = now.getFullYear() === year ? now.getMonth() : 0;
+  return (
+    <EmptyState
+      icon={<Wallet size={26} />}
+      title={`Empieza tu ${year}`}
+      message="Aún no has anotado ingresos ni gastos este año. Abre un mes para registrar tu primer presupuesto."
+      action={
+        <button className="btn-primary mt-1" onClick={() => navigate(`/month/${startMonth}`)}>
+          Registrar un mes →
+        </button>
+      }
+    />
   );
 }
 
