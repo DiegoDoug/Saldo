@@ -126,7 +126,7 @@ Goals           ✅  CRUD + GET /goals/{id}/projection + POST /goals/{id}/contri
 Net worth       ✅  assets CRUD, liabilities CRUD, GET /net-worth, GET /net-worth/history, POST /net-worth/snapshot
 Reports         ✅  GET /reports (trends, by-category, by-merchant, largest,
                                  savings-rate, health-score in one payload)
-Forecast        ⬜  GET /forecast?horizon=7|30|90
+Forecast        ✅  GET /forecast?horizon=  (start balance + recurring + history)
 Sync            ✅→⬜  /sync/push + /sync/pull extended per table, LWW preserved
 ```
 
@@ -143,7 +143,7 @@ under the same authenticated `SyncProvider` shell:
 /goals          Goals                                  ✅
 /net-worth      Net worth + allocation                 ✅
 /reports        Analytics                              ✅
-/forecast       Cash-flow projections                  ⬜
+/forecast       Cash-flow projections                  ✅
 /merchants      Merchant directory                     ✅
 /settings       Settings                               ⬜
 ```
@@ -178,7 +178,7 @@ palette, keyboard shortcuts, contextual menus, mobile gestures.
 4. ✅ **Recurring / Bills** — materialize future transactions, upcoming page.
 5. ✅ **Goals**.
 6. ✅ **Assets / Liabilities / Net worth**.
-7. ⬜ **Forecasting** (depends on recurring + history).
+7. ✅ **Forecasting** (depends on recurring + history).
 8. ✅ **Reports / Analytics** (depends on transactions + merchants).
 9. ⬜ **Dashboard widgets + pages polish + command palette / shortcuts**.
 

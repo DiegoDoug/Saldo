@@ -13,6 +13,7 @@ import {
   CalendarClock,
   Home,
   Landmark,
+  LineChart,
   type LucideIcon,
   Receipt,
   Scale,
@@ -66,6 +67,7 @@ const NAV: NavEntry[] = [
     icon: BarChart3,
     items: [
       { to: "/reports", label: "Informes", icon: BarChart3 },
+      { to: "/forecast", label: "Previsión", icon: LineChart },
       { to: "/year", label: "Año", icon: BarChart3 },
     ],
   },

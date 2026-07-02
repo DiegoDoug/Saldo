@@ -85,6 +85,11 @@ def create_app() -> FastAPI:
 
     app.include_router(reports_router)
 
+    # --- Forecast (cash-flow projection) --------------------------------
+    from app.modules.forecast.router import router as forecast_router
+
+    app.include_router(forecast_router)
+
     # --- Sync -----------------------------------------------------------
     from app.modules.sync.router import router as sync_router
 
