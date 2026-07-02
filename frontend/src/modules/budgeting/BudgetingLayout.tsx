@@ -10,6 +10,7 @@ import {
   LogOut,
   PiggyBank,
   Receipt,
+  Store,
 } from "lucide-react";
 import { useEffect } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
@@ -84,10 +85,11 @@ export function BudgetingLayout() {
 
       <PwaUpdatePrompt />
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-center gap-2 border-t border-line bg-card/95 p-2 backdrop-blur">
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-center gap-1 overflow-x-auto border-t border-line bg-card/95 p-2 backdrop-blur">
         <BottomLink to="/" icon={<Home size={20} />} label="Inicio" end />
         <BottomLink to="/transactions" icon={<Receipt size={20} />} label="Movimientos" />
         <BottomLink to="/accounts" icon={<Landmark size={20} />} label="Cuentas" />
+        <BottomLink to="/merchants" icon={<Store size={20} />} label="Comercios" />
         <BottomLink to="/year" icon={<BarChart3 size={20} />} label="Año" />
       </nav>
     </div>
@@ -110,7 +112,7 @@ function BottomLink({
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex flex-col items-center gap-0.5 rounded-xl px-6 py-1.5 text-xs font-semibold transition ${
+        `flex shrink-0 flex-col items-center gap-0.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
           isActive ? "bg-mint-soft/60 text-mint" : "text-ink-soft"
         }`
       }

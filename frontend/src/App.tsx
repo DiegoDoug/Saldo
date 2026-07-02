@@ -5,6 +5,7 @@ import { BudgetingLayout } from "./modules/budgeting/BudgetingLayout";
 import { MonthView } from "./modules/budgeting/MonthView";
 import { YearView } from "./modules/budgeting/YearView";
 import { DashboardPage } from "./modules/dashboard/DashboardPage";
+import { MerchantsPage } from "./modules/merchants/MerchantsPage";
 import { TransactionsPage } from "./modules/transactions/TransactionsPage";
 import { LoginPage } from "./modules/identity/LoginPage";
 import { RegisterPage } from "./modules/identity/RegisterPage";
@@ -30,6 +31,7 @@ export function App() {
         <Route path="/year" element={<YearView />} />
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/merchants" element={<MerchantsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

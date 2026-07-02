@@ -14,7 +14,21 @@ from pydantic import BaseModel
 
 from app.modules.accounts.schemas import AccountRead
 from app.modules.budgeting.schemas import CategoryRead, EntryRead
+from app.modules.merchants.schemas import MerchantRead
 from app.modules.transactions.schemas import TransactionRead
+
+
+class MerchantSync(BaseModel):
+    id: uuid.UUID
+    name: str
+    logo: str = ""
+    color: str = ""
+    category_id: uuid.UUID | None = None
+    website: str = ""
+    location: str = ""
+    recurring_probability: float = 0.0
+    updated_at: datetime
+    deleted: bool = False
 
 
 class AccountSync(BaseModel):
@@ -75,6 +89,7 @@ class EntrySync(BaseModel):
 class PushRequest(BaseModel):
     accounts: list[AccountSync] = []
     transactions: list[TransactionSync] = []
+    merchants: list[MerchantSync] = []
     categories: list[CategorySync] = []
     entries: list[EntrySync] = []
 
@@ -84,6 +99,7 @@ class PushResponse(BaseModel):
     # so the client can overwrite its local copy where the server won.
     accounts: list[AccountRead] = []
     transactions: list[TransactionRead] = []
+    merchants: list[MerchantRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime
@@ -92,6 +108,7 @@ class PushResponse(BaseModel):
 class PullResponse(BaseModel):
     accounts: list[AccountRead] = []
     transactions: list[TransactionRead] = []
+    merchants: list[MerchantRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
     server_time: datetime

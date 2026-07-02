@@ -60,6 +60,11 @@ def create_app() -> FastAPI:
 
     app.include_router(transactions_router)
 
+    # --- Merchants ------------------------------------------------------
+    from app.modules.merchants.router import router as merchants_router
+
+    app.include_router(merchants_router)
+
     # --- Sync -----------------------------------------------------------
     from app.modules.sync.router import router as sync_router
 

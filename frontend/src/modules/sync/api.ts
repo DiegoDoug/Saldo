@@ -3,11 +3,13 @@
 import { apiRequest } from "../../shared/api/client";
 import type { WireAccount } from "../accounts/mappers";
 import type { WireCategory, WireEntry } from "../budgeting/mappers";
+import type { WireMerchant } from "../merchants/mappers";
 import type { WireTransaction } from "../transactions/mappers";
 
 interface SyncResponse {
   accounts?: WireAccount[];
   transactions?: WireTransaction[];
+  merchants?: WireMerchant[];
   categories: WireCategory[];
   entries: WireEntry[];
   server_time: string;
@@ -16,6 +18,7 @@ interface SyncResponse {
 export interface PushPayload {
   accounts?: unknown[];
   transactions?: unknown[];
+  merchants?: unknown[];
   categories?: unknown[];
   entries?: unknown[];
 }
@@ -26,6 +29,7 @@ export function pushSync(payload: PushPayload): Promise<SyncResponse> {
     json: {
       accounts: payload.accounts ?? [],
       transactions: payload.transactions ?? [],
+      merchants: payload.merchants ?? [],
       categories: payload.categories ?? [],
       entries: payload.entries ?? [],
     },

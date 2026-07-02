@@ -10,6 +10,7 @@ describe("Dexie schema", () => {
       "categories",
       "entries",
       "layout",
+      "merchants",
       "meta",
       "profile",
       "transactions",
