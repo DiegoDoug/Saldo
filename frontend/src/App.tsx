@@ -9,6 +9,7 @@ import { DashboardPage } from "./modules/dashboard/DashboardPage";
 import { GoalsPage } from "./modules/goals/GoalsPage";
 import { MerchantsPage } from "./modules/merchants/MerchantsPage";
 import { NetWorthPage } from "./modules/networth/NetWorthPage";
+import { ReportsPage } from "./modules/reports/ReportsPage";
 import { TransactionsPage } from "./modules/transactions/TransactionsPage";
 import { LoginPage } from "./modules/identity/LoginPage";
 import { RegisterPage } from "./modules/identity/RegisterPage";
@@ -38,6 +39,7 @@ export function App() {
         <Route path="/bills" element={<BillsPage />} />
         <Route path="/goals" element={<GoalsPage />} />
         <Route path="/net-worth" element={<NetWorthPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

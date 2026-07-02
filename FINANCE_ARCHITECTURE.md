@@ -124,8 +124,8 @@ Merchants       ✅  CRUD + GET /merchants/{id}/stats
 Recurring/Bills ✅  CRUD + GET /bills/upcoming?days=  + POST /recurring/{id}/materialize
 Goals           ✅  CRUD + GET /goals/{id}/projection + POST /goals/{id}/contribute
 Net worth       ✅  assets CRUD, liabilities CRUD, GET /net-worth, GET /net-worth/history, POST /net-worth/snapshot
-Reports         ⬜  GET /reports/{spending-trends,income-trends,by-merchant,by-category,
-                                 largest,monthly,yearly,savings-rate,health-score}
+Reports         ✅  GET /reports (trends, by-category, by-merchant, largest,
+                                 savings-rate, health-score in one payload)
 Forecast        ⬜  GET /forecast?horizon=7|30|90
 Sync            ✅→⬜  /sync/push + /sync/pull extended per table, LWW preserved
 ```
@@ -142,7 +142,7 @@ under the same authenticated `SyncProvider` shell:
 /bills          Upcoming bills + calendar              ✅
 /goals          Goals                                  ✅
 /net-worth      Net worth + allocation                 ✅
-/reports        Analytics                              ⬜
+/reports        Analytics                              ✅
 /forecast       Cash-flow projections                  ⬜
 /merchants      Merchant directory                     ✅
 /settings       Settings                               ⬜
@@ -179,7 +179,7 @@ palette, keyboard shortcuts, contextual menus, mobile gestures.
 5. ✅ **Goals**.
 6. ✅ **Assets / Liabilities / Net worth**.
 7. ⬜ **Forecasting** (depends on recurring + history).
-8. ⬜ **Reports / Analytics** (depends on transactions + merchants).
+8. ✅ **Reports / Analytics** (depends on transactions + merchants).
 9. ⬜ **Dashboard widgets + pages polish + command palette / shortcuts**.
 
 Each step lands as its own commit with a runnable app and green tests.

@@ -80,6 +80,11 @@ def create_app() -> FastAPI:
 
     app.include_router(networth_router)
 
+    # --- Reports (analytics over transactions) --------------------------
+    from app.modules.reports.router import router as reports_router
+
+    app.include_router(reports_router)
+
     # --- Sync -----------------------------------------------------------
     from app.modules.sync.router import router as sync_router
 
