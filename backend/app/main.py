@@ -60,6 +60,36 @@ def create_app() -> FastAPI:
 
     app.include_router(transactions_router)
 
+    # --- Merchants ------------------------------------------------------
+    from app.modules.merchants.router import router as merchants_router
+
+    app.include_router(merchants_router)
+
+    # --- Bills / recurring rules ----------------------------------------
+    from app.modules.bills.router import router as bills_router
+
+    app.include_router(bills_router)
+
+    # --- Goals ----------------------------------------------------------
+    from app.modules.goals.router import router as goals_router
+
+    app.include_router(goals_router)
+
+    # --- Net worth (assets, liabilities, snapshots) ---------------------
+    from app.modules.networth.router import router as networth_router
+
+    app.include_router(networth_router)
+
+    # --- Reports (analytics over transactions) --------------------------
+    from app.modules.reports.router import router as reports_router
+
+    app.include_router(reports_router)
+
+    # --- Forecast (cash-flow projection) --------------------------------
+    from app.modules.forecast.router import router as forecast_router
+
+    app.include_router(forecast_router)
+
     # --- Sync -----------------------------------------------------------
     from app.modules.sync.router import router as sync_router
 

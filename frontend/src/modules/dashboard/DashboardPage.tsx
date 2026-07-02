@@ -22,11 +22,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useLiveQuery } from "dexie-react-hooks";
 import { Check, Eye, EyeOff, GripVertical, SlidersHorizontal, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { LayoutData } from "../../db/db";
+import { db, type LayoutData } from "../../db/db";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { useYearResult } from "../budgeting/hooks";
 import { isYearEmpty } from "../budgeting/summary";
@@ -40,7 +41,11 @@ export function DashboardPage() {
   const calc = useYearResult(year);
   const layout = useLayout();
   const [editing, setEditing] = useState(false);
-  const empty = isYearEmpty(calc);
+  // The dashboard now spans finance data too, so it's only "empty" when there's
+  // neither a budget nor any accounts/transactions to show.
+  const financeCount =
+    useLiveQuery(async () => (await db.accounts.count()) + (await db.transactions.count()), []) ?? 0;
+  const empty = isYearEmpty(calc) && financeCount === 0;
 
   async function persist(next: LayoutData) {
     await saveLayout(next);

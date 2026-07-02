@@ -10,6 +10,7 @@ import { type LocalTransaction, type TransactionType } from "../../db/db";
 import { formatMoney, parseAmount } from "../../shared/format";
 import { useAccounts } from "../accounts/hooks";
 import { useCategories } from "../budgeting/hooks";
+import { useMerchants } from "../merchants/hooks";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { useTransactions, type TransactionFilters } from "./hooks";
 import { addTransaction, addTransfer, deleteTransaction } from "./localRepo";
@@ -135,11 +136,13 @@ function TransactionRow({
 function AddTransactionForm({ onDone }: { onDone: () => void }) {
   const accounts = useAccounts();
   const categories = useCategories();
+  const merchants = useMerchants();
   const [type, setType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [toAccountId, setToAccountId] = useState(accounts[1]?.id ?? "");
   const [categoryId, setCategoryId] = useState("");
+  const [merchantId, setMerchantId] = useState("");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
@@ -166,6 +169,7 @@ function AddTransactionForm({ onDone }: { onDone: () => void }) {
         currency: account?.currency,
         accountId,
         categoryId: categoryId || null,
+        merchantId: merchantId || null,
         date,
         notes,
       });
@@ -240,6 +244,22 @@ function AddTransactionForm({ onDone }: { onDone: () => void }) {
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {type !== "transfer" && merchants.length > 0 && (
+        <select
+          className="field-input"
+          value={merchantId}
+          onChange={(e) => setMerchantId(e.target.value)}
+          aria-label="Comercio"
+        >
+          <option value="">Sin comercio</option>
+          {merchants.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
             </option>
           ))}
         </select>

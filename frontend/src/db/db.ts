@@ -74,6 +74,93 @@ export interface LocalTransaction {
   deleted: 0 | 1;
 }
 
+export type AssetKind = "cash" | "property" | "vehicle" | "investment" | "crypto" | "other";
+
+export interface LocalAsset {
+  id: string;
+  name: string;
+  kind: AssetKind;
+  value: number;
+  currency: string;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
+export type LiabilityKind = "mortgage" | "loan" | "credit_card" | "student" | "other";
+
+export interface LocalLiability {
+  id: string;
+  name: string;
+  kind: LiabilityKind;
+  balance: number;
+  currency: string;
+  interestRate: number;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
+export interface LocalNetWorthSnapshot {
+  id: string;
+  date: string; // ISO date (one per day)
+  assetsTotal: number;
+  liabilitiesTotal: number;
+  netWorth: number;
+  currency: string;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
+export type GoalKind = "emergency" | "vacation" | "house" | "car" | "custom";
+
+export interface LocalGoal {
+  id: string;
+  name: string;
+  kind: GoalKind;
+  targetAmount: number;
+  currentAmount: number;
+  monthlyContribution: number;
+  currency: string;
+  targetDate: string | null;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
+export type Frequency = "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "yearly";
+
+export interface LocalRecurringRule {
+  id: string;
+  name: string;
+  type: TransactionType;
+  amount: number;
+  currency: string;
+  accountId: string;
+  transferAccountId: string | null;
+  merchantId: string | null;
+  categoryId: string | null;
+  notes: string;
+  frequency: Frequency;
+  interval: number;
+  startDate: string; // ISO date
+  endDate: string | null;
+  nextRun: string; // ISO date cursor
+  autoGenerate: 0 | 1;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
+export interface LocalMerchant {
+  id: string;
+  name: string;
+  logo: string;
+  color: string;
+  categoryId: string | null;
+  website: string;
+  location: string;
+  recurringProbability: number; // 0..1
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
 /** Mirror of the authenticated User (one row: the current profile). */
 export interface LocalProfile {
   id: string;
@@ -111,6 +198,12 @@ export class SaldoDB extends Dexie {
   layout!: Table<LocalLayout, string>;
   accounts!: Table<LocalAccount, string>;
   transactions!: Table<LocalTransaction, string>;
+  merchants!: Table<LocalMerchant, string>;
+  recurringRules!: Table<LocalRecurringRule, string>;
+  goals!: Table<LocalGoal, string>;
+  assets!: Table<LocalAsset, string>;
+  liabilities!: Table<LocalLiability, string>;
+  netWorthSnapshots!: Table<LocalNetWorthSnapshot, string>;
 
   constructor() {
     super("saldo");
@@ -129,6 +222,24 @@ export class SaldoDB extends Dexie {
       accounts: "id, type, archived, deleted, updatedAt, position",
       transactions:
         "id, accountId, transferAccountId, type, categoryId, merchantId, date, deleted, updatedAt",
+    });
+    // v4 adds merchants (additive upgrade).
+    this.version(4).stores({
+      merchants: "id, name, categoryId, deleted, updatedAt",
+    });
+    // v5 adds recurring rules / bills (additive upgrade).
+    this.version(5).stores({
+      recurringRules: "id, accountId, frequency, nextRun, deleted, updatedAt",
+    });
+    // v6 adds savings goals (additive upgrade).
+    this.version(6).stores({
+      goals: "id, kind, deleted, updatedAt",
+    });
+    // v7 adds net worth (assets, liabilities, snapshots) (additive upgrade).
+    this.version(7).stores({
+      assets: "id, kind, deleted, updatedAt",
+      liabilities: "id, kind, deleted, updatedAt",
+      netWorthSnapshots: "id, date, deleted, updatedAt",
     });
   }
 }

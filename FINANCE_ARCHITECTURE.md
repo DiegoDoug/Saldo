@@ -78,12 +78,12 @@ updated_at, deleted`):
 |-------|-----------|-------|
 | `account` ✅ | `name, type, currency, opening_balance, color, icon, archived, position` | `type ∈ checking, savings, cash, credit_card, investment, crypto`. Balance = opening + Σ signed transactions. |
 | `transaction` ✅ | `type, amount, currency, account_id, transfer_account_id, merchant_id, category_id, date, notes, tags, recurring_id` | `type ∈ income, expense, transfer`. `transfer_account_id` set only for transfers. `tags` is JSON array of strings. |
-| `merchant` ⬜ | `name, logo, color, category_id, website, location, recurring_probability` | Transactions reference a merchant instead of free text. |
-| `recurring_rule` ⬜ | `template (amount/type/account/category/merchant), frequency, interval, start_date, end_date, next_run` | `frequency ∈ daily, weekly, biweekly, monthly, quarterly, yearly`. Materializes future `transaction` rows. |
-| `goal` ⬜ | `name, kind, target_amount, current_amount, monthly_contribution, currency, target_date` | `kind ∈ emergency, vacation, house, car, custom`. Completion date computed in domain core. |
-| `asset` ⬜ | `name, kind, value, currency` | Feeds net worth. |
-| `liability` ⬜ | `name, kind, balance, currency, interest_rate` | Feeds net worth. |
-| `net_worth_snapshot` ⬜ | `date, assets_total, liabilities_total, net_worth` | Historical series; written by a periodic job / on demand. |
+| `merchant` ✅ | `name, logo, color, category_id, website, location, recurring_probability` | Transactions reference a merchant instead of free text. |
+| `recurring_rule` ✅ | `template (amount/type/account/category/merchant), frequency, interval, start_date, end_date, next_run` | `frequency ∈ daily, weekly, biweekly, monthly, quarterly, yearly`. Materializes future `transaction` rows with deterministic per-occurrence ids (sync-dedup). |
+| `goal` ✅ | `name, kind, target_amount, current_amount, monthly_contribution, currency, target_date` | `kind ∈ emergency, vacation, house, car, custom`. Progress / months-remaining / completion date computed in a mirrored domain core. |
+| `asset` ✅ | `name, kind, value, currency` | Feeds net worth. |
+| `liability` ✅ | `name, kind, balance, currency, interest_rate` | Feeds net worth. |
+| `net_worth_snapshot` ✅ | `date, assets_total, liabilities_total, net_worth` | Historical series; upserted per-day on demand. |
 
 Relationships & indexes:
 
@@ -120,13 +120,13 @@ Transactions    ✅
   POST   /transactions/bulk             (bulk delete / categorize / tag)
   POST   /transactions/transfer         (atomic paired transfer helper)
 
-Merchants       ⬜  CRUD + GET /merchants/{id}/stats
-Recurring/Bills ⬜  CRUD + GET /bills/upcoming?days=  + POST /recurring/{id}/materialize
-Goals           ⬜  CRUD + GET /goals/{id}/projection
-Net worth       ⬜  assets CRUD, liabilities CRUD, GET /net-worth, GET /net-worth/history
-Reports         ⬜  GET /reports/{spending-trends,income-trends,by-merchant,by-category,
-                                 largest,monthly,yearly,savings-rate,health-score}
-Forecast        ⬜  GET /forecast?horizon=7|30|90
+Merchants       ✅  CRUD + GET /merchants/{id}/stats
+Recurring/Bills ✅  CRUD + GET /bills/upcoming?days=  + POST /recurring/{id}/materialize
+Goals           ✅  CRUD + GET /goals/{id}/projection + POST /goals/{id}/contribute
+Net worth       ✅  assets CRUD, liabilities CRUD, GET /net-worth, GET /net-worth/history, POST /net-worth/snapshot
+Reports         ✅  GET /reports (trends, by-category, by-merchant, largest,
+                                 savings-rate, health-score in one payload)
+Forecast        ✅  GET /forecast?horizon=  (start balance + recurring + history)
 Sync            ✅→⬜  /sync/push + /sync/pull extended per table, LWW preserved
 ```
 
@@ -139,12 +139,12 @@ under the same authenticated `SyncProvider` shell:
 /               Dashboard (expanded with widgets)      (existing, extended)
 /transactions   Transactions list + filters + bulk     ✅
 /accounts       Accounts + balances                    ✅
-/bills          Upcoming bills + calendar              ⬜
-/goals          Goals                                  ⬜
-/net-worth      Net worth + allocation                 ⬜
-/reports        Analytics                              ⬜
-/forecast       Cash-flow projections                  ⬜
-/merchants      Merchant directory                     ⬜
+/bills          Upcoming bills + calendar              ✅
+/goals          Goals                                  ✅
+/net-worth      Net worth + allocation                 ✅
+/reports        Analytics                              ✅
+/forecast       Cash-flow projections                  ✅
+/merchants      Merchant directory                     ✅
 /settings       Settings                               ⬜
 ```
 
@@ -174,13 +174,14 @@ palette, keyboard shortcuts, contextual menus, mobile gestures.
 1. ✅ **Accounts** — foundation; every transaction needs an account.
 2. ✅ **Transactions** — the primary financial data source (CRUD, filters,
    search, sort, pagination, bulk, transfers).
-3. ⬜ **Merchants** — richer transaction descriptions.
-4. ⬜ **Recurring / Bills** — materialize future transactions, upcoming page.
-5. ⬜ **Goals**.
-6. ⬜ **Assets / Liabilities / Net worth**.
-7. ⬜ **Forecasting** (depends on recurring + history).
-8. ⬜ **Reports / Analytics** (depends on transactions + merchants).
-9. ⬜ **Dashboard widgets + pages polish + command palette / shortcuts**.
+3. ✅ **Merchants** — richer transaction descriptions.
+4. ✅ **Recurring / Bills** — materialize future transactions, upcoming page.
+5. ✅ **Goals**.
+6. ✅ **Assets / Liabilities / Net worth**.
+7. ✅ **Forecasting** (depends on recurring + history).
+8. ✅ **Reports / Analytics** (depends on transactions + merchants).
+9. ✅ **Dashboard widgets** (finance widgets + grouped nav). Remaining polish
+   (command palette, keyboard shortcuts, mobile gestures) is post-v1.
 
 Each step lands as its own commit with a runnable app and green tests.
 </content>

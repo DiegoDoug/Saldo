@@ -1,23 +1,15 @@
 /** App shell for the budgeting views: sticky header (brand, year switch,
  * logout) and a bottom nav, with the active view rendered via <Outlet />. */
 
-import {
-  BarChart3,
-  ChevronLeft,
-  ChevronRight,
-  Home,
-  Landmark,
-  LogOut,
-  PiggyBank,
-  Receipt,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, PiggyBank } from "lucide-react";
 import { useEffect } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 
 import { useLayout } from "../dashboard/layoutRepo";
 import { useLogout } from "../identity/hooks";
 import { PwaUpdatePrompt } from "../sync/PwaUpdatePrompt";
 import { SyncStatusBar } from "../sync/SyncStatusBar";
+import { AppNav } from "./AppNav";
 import { useBudgetingUi } from "./uiStore";
 
 export function BudgetingLayout() {
@@ -84,39 +76,7 @@ export function BudgetingLayout() {
 
       <PwaUpdatePrompt />
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-center gap-2 border-t border-line bg-card/95 p-2 backdrop-blur">
-        <BottomLink to="/" icon={<Home size={20} />} label="Inicio" end />
-        <BottomLink to="/transactions" icon={<Receipt size={20} />} label="Movimientos" />
-        <BottomLink to="/accounts" icon={<Landmark size={20} />} label="Cuentas" />
-        <BottomLink to="/year" icon={<BarChart3 size={20} />} label="Año" />
-      </nav>
+      <AppNav />
     </div>
-  );
-}
-
-function BottomLink({
-  to,
-  icon,
-  label,
-  end,
-}: {
-  to: string;
-  icon: React.ReactNode;
-  label: string;
-  end?: boolean;
-}) {
-  return (
-    <NavLink
-      to={to}
-      end={end}
-      className={({ isActive }) =>
-        `flex flex-col items-center gap-0.5 rounded-xl px-6 py-1.5 text-xs font-semibold transition ${
-          isActive ? "bg-mint-soft/60 text-mint" : "text-ink-soft"
-        }`
-      }
-    >
-      {icon}
-      <span>{label}</span>
-    </NavLink>
   );
 }

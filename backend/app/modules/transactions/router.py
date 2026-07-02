@@ -44,7 +44,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def _validate_refs(
     session: AsyncSession, user_id: uuid.UUID, data: dict
 ) -> None:
-    """Ensure any referenced account/category belongs to the caller."""
+    """Ensure any referenced account/category/merchant belongs to the caller."""
     for field in ("account_id", "transfer_account_id"):
         aid = data.get(field)
         if aid is not None and await get_owned_account(session, user_id, aid) is None:
@@ -52,6 +52,12 @@ async def _validate_refs(
     cid = data.get("category_id")
     if cid is not None and await get_owned_category(session, user_id, cid) is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown category for this user")
+    mid = data.get("merchant_id")
+    if mid is not None:
+        from app.modules.merchants.service import get_owned_merchant
+
+        if await get_owned_merchant(session, user_id, mid) is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown merchant for this user")
 
 
 @router.post("", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)
