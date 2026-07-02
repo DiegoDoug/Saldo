@@ -180,7 +180,8 @@ palette, keyboard shortcuts, contextual menus, mobile gestures.
 6. ✅ **Assets / Liabilities / Net worth**.
 7. ✅ **Forecasting** (depends on recurring + history).
 8. ✅ **Reports / Analytics** (depends on transactions + merchants).
-9. ⬜ **Dashboard widgets + pages polish + command palette / shortcuts**.
+9. ✅ **Dashboard widgets** (finance widgets + grouped nav). Remaining polish
+   (command palette, keyboard shortcuts, mobile gestures) is post-v1.
 
 Each step lands as its own commit with a runnable app and green tests.
 </content>
