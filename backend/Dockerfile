@@ -17,7 +17,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # The SQLite volume mounts here (see docker-compose.yml).
-RUN mkdir -p /app/data && chmod +x entrypoint.sh
+# Strip any CRLF line endings a Windows checkout may have introduced, otherwise
+# the `#!/bin/sh` shebang becomes `#!/bin/sh\r` and the container fails to start
+# with "/bin/sh: no such file or directory".
+RUN sed -i 's/\r$//' entrypoint.sh \
+    && mkdir -p /app/data \
+    && chmod +x entrypoint.sh
 
 EXPOSE 8000
 
