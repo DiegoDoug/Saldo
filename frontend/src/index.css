@@ -35,7 +35,9 @@
 @layer components {
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-mint px-4 py-2.5
-      font-semibold text-white transition hover:brightness-105 disabled:opacity-50;
+      font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed
+      disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2
+      focus-visible:ring-mint focus-visible:ring-offset-2;
   }
 
   .field-input {
@@ -45,5 +47,27 @@
 
   .card-panel {
     @apply rounded-2xl border border-line bg-card p-6;
+  }
+
+  /* Subtle entrance for the auth screens; disabled for reduced-motion users. */
+  .auth-card-enter {
+    animation: auth-rise 0.4s ease-out both;
+  }
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-card-enter {
+    animation: none;
   }
 }
