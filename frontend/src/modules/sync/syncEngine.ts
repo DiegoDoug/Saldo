@@ -13,7 +13,18 @@
  */
 
 import { ApiError } from "../../shared/api/client";
-import { db, type LocalCategory, type LocalEntry } from "../../db/db";
+import {
+  db,
+  type LocalAccount,
+  type LocalCategory,
+  type LocalEntry,
+  type LocalTransaction,
+} from "../../db/db";
+import {
+  localAccountToSync,
+  wireToLocalAccount,
+  type WireAccount,
+} from "../accounts/mappers";
 import {
   localCategoryToSync,
   localEntryToSync,
@@ -23,6 +34,11 @@ import {
   type WireEntry,
 } from "../budgeting/mappers";
 import { seedDefaultCategoriesIfEmpty } from "../budgeting/localRepo";
+import {
+  localTransactionToSync,
+  wireToLocalTransaction,
+  type WireTransaction,
+} from "../transactions/mappers";
 import { pullSync, pushSync } from "./api";
 import { useSyncStore } from "./syncStore";
 
@@ -61,7 +77,30 @@ async function mergeEntries(incoming: WireEntry[]): Promise<void> {
   }
 }
 
-function changedSince<T extends LocalCategory | LocalEntry>(rows: T[], since?: string): T[] {
+async function mergeAccounts(incoming: WireAccount[] = []): Promise<void> {
+  for (const wa of incoming) {
+    const local = await db.accounts.get(wa.id);
+    const next = wireToLocalAccount(wa);
+    if (!local || toEpoch(next.updatedAt) >= toEpoch(local.updatedAt)) {
+      await db.accounts.put(next);
+    }
+  }
+}
+
+async function mergeTransactions(incoming: WireTransaction[] = []): Promise<void> {
+  for (const wt of incoming) {
+    const local = await db.transactions.get(wt.id);
+    const next = wireToLocalTransaction(wt);
+    if (!local || toEpoch(next.updatedAt) >= toEpoch(local.updatedAt)) {
+      await db.transactions.put(next);
+    }
+  }
+}
+
+function changedSince<T extends LocalAccount | LocalCategory | LocalEntry | LocalTransaction>(
+  rows: T[],
+  since?: string,
+): T[] {
   if (!since) return rows;
   const cutoff = toEpoch(since);
   return rows.filter((r) => toEpoch(r.updatedAt) > cutoff);
@@ -113,22 +152,42 @@ async function doSync(): Promise<boolean> {
   try {
     const since = await getMeta(LAST_SYNC_KEY);
 
-    const allCategories = await db.categories.toArray();
-    const allEntries = await db.entries.toArray();
-    const dirtyCategories = changedSince(allCategories, since).map(localCategoryToSync);
-    const dirtyEntries = changedSince(allEntries, since).map(localEntryToSync);
+    const dirtyAccounts = changedSince(await db.accounts.toArray(), since).map(localAccountToSync);
+    const dirtyTransactions = changedSince(await db.transactions.toArray(), since).map(
+      localTransactionToSync,
+    );
+    const dirtyCategories = changedSince(await db.categories.toArray(), since).map(
+      localCategoryToSync,
+    );
+    const dirtyEntries = changedSince(await db.entries.toArray(), since).map(localEntryToSync);
 
-    if (dirtyCategories.length || dirtyEntries.length) {
-      const pushed = await pushSync(dirtyCategories, dirtyEntries);
+    if (
+      dirtyAccounts.length ||
+      dirtyTransactions.length ||
+      dirtyCategories.length ||
+      dirtyEntries.length
+    ) {
+      const pushed = await pushSync({
+        accounts: dirtyAccounts,
+        transactions: dirtyTransactions,
+        categories: dirtyCategories,
+        entries: dirtyEntries,
+      });
       const conflicts =
+        countConflicts(dirtyAccounts, pushed.accounts ?? []) +
+        countConflicts(dirtyTransactions, pushed.transactions ?? []) +
         countConflicts(dirtyCategories, pushed.categories) +
         countConflicts(dirtyEntries, pushed.entries);
       if (conflicts > 0) store.addConflicts(conflicts);
+      await mergeAccounts(pushed.accounts);
+      await mergeTransactions(pushed.transactions);
       await mergeCategories(pushed.categories);
       await mergeEntries(pushed.entries);
     }
 
     const pulled = await pullSync(since);
+    await mergeAccounts(pulled.accounts);
+    await mergeTransactions(pulled.transactions);
     await mergeCategories(pulled.categories);
     await mergeEntries(pulled.entries);
     await setMeta(LAST_SYNC_KEY, pulled.server_time);

@@ -1,7 +1,16 @@
 /** App shell for the budgeting views: sticky header (brand, year switch,
  * logout) and a bottom nav, with the active view rendered via <Outlet />. */
 
-import { BarChart3, ChevronLeft, ChevronRight, Home, LogOut, PiggyBank } from "lucide-react";
+import {
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  Home,
+  Landmark,
+  LogOut,
+  PiggyBank,
+  Receipt,
+} from "lucide-react";
 import { useEffect } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 
@@ -77,6 +86,8 @@ export function BudgetingLayout() {
 
       <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-center gap-2 border-t border-line bg-card/95 p-2 backdrop-blur">
         <BottomLink to="/" icon={<Home size={20} />} label="Inicio" end />
+        <BottomLink to="/transactions" icon={<Receipt size={20} />} label="Movimientos" />
+        <BottomLink to="/accounts" icon={<Landmark size={20} />} label="Cuentas" />
         <BottomLink to="/year" icon={<BarChart3 size={20} />} label="Año" />
       </nav>
     </div>
