@@ -14,6 +14,7 @@ import { ReportsPage } from "./modules/reports/ReportsPage";
 import { TransactionsPage } from "./modules/transactions/TransactionsPage";
 import { LoginPage } from "./modules/identity/LoginPage";
 import { RegisterPage } from "./modules/identity/RegisterPage";
+import { ResetPasswordPage } from "./modules/identity/ResetPasswordPage";
 import { SyncProvider } from "./modules/sync/SyncProvider";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 
@@ -22,6 +23,7 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route
         element={
           <ProtectedRoute>

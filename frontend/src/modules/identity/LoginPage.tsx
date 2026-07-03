@@ -6,6 +6,7 @@ import { PasswordField } from "../../shared/ui/PasswordField";
 import { TextField } from "../../shared/ui/TextField";
 import { AuthLayout } from "./AuthLayout";
 import { loginErrorMessage } from "./authErrors";
+import { ForgotPasswordDialog } from "./ForgotPasswordDialog";
 import { useLogin } from "./hooks";
 import { validateEmail, validatePassword } from "./validation";
 
@@ -13,6 +14,8 @@ interface LoginLocationState {
   justRegistered?: boolean;
   /** Set by callers that redirect here after a token expires (additive). */
   sessionExpired?: boolean;
+  /** Set after a successful password reset (additive). */
+  passwordReset?: boolean;
 }
 
 export function LoginPage() {
@@ -23,6 +26,7 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [touched, setTouched] = useState({ email: false, password: false });
+  const [showForgot, setShowForgot] = useState(false);
 
   const emailError = validateEmail(email);
   const passwordError = validatePassword(password);
@@ -63,6 +67,11 @@ export function LoginPage() {
             Tu sesión expiró. Vuelve a iniciar sesión.
           </p>
         )}
+        {state?.passwordReset && !login.isError && (
+          <p className="rounded-xl bg-mint-soft px-3 py-2 text-sm font-medium text-mint" role="status">
+            Tu contraseña fue actualizada. Inicia sesión con la nueva.
+          </p>
+        )}
 
         <TextField
           label="Correo"
@@ -86,6 +95,16 @@ export function LoginPage() {
           error={touched.password ? passwordError : null}
         />
 
+        <div className="-mt-1 text-right">
+          <button
+            type="button"
+            className="rounded text-sm font-medium text-mint hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint-soft"
+            onClick={() => setShowForgot(true)}
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        </div>
+
         {login.isError && (
           <p className="rounded-xl bg-coral-soft px-3 py-2 text-sm text-coral" role="alert">
             {loginErrorMessage(login.error)}
@@ -103,6 +122,10 @@ export function LoginPage() {
           )}
         </button>
       </form>
+
+      {showForgot && (
+        <ForgotPasswordDialog initialEmail={email} onClose={() => setShowForgot(false)} />
+      )}
     </AuthLayout>
   );
 }

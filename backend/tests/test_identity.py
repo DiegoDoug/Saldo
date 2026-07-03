@@ -77,3 +77,65 @@ async def test_duplicate_email_is_rejected(client: AsyncClient) -> None:
         json={"email": "ana@example.com", "password": "passphrase-two"},
     )
     assert resp.status_code == 400
+
+
+# --- Password reset -----------------------------------------------------
+
+
+async def test_forgot_password_is_non_enumerable(client: AsyncClient, monkeypatch) -> None:
+    """202 for both known and unknown emails; the email only fires for a real user."""
+    sent: list[str] = []
+
+    async def fake_send_email(to: str, subject: str, html: str) -> None:
+        sent.append(to)
+
+    monkeypatch.setattr("app.modules.identity.manager.send_email", fake_send_email)
+
+    await register(client, "ana@example.com", "correct-passphrase")
+
+    known = await client.post("/auth/forgot-password", json={"email": "ana@example.com"})
+    unknown = await client.post("/auth/forgot-password", json={"email": "nobody@example.com"})
+
+    assert known.status_code == 202
+    assert unknown.status_code == 202
+    # Only the registered account receives a recovery email.
+    assert sent == ["ana@example.com"]
+
+
+async def test_reset_password_with_valid_token_changes_password(
+    client: AsyncClient, monkeypatch
+) -> None:
+    tokens: list[str] = []
+
+    async def capture_token(to: str, subject: str, html: str) -> None:
+        # The reset link embeds the token as `?token=...`.
+        tokens.append(html.split("token=")[1].split('"')[0])
+
+    monkeypatch.setattr("app.modules.identity.manager.send_email", capture_token)
+
+    await register(client, "ana@example.com", "old-passphrase")
+    await client.post("/auth/forgot-password", json={"email": "ana@example.com"})
+    assert tokens, "no reset token was emitted"
+
+    resp = await client.post(
+        "/auth/reset-password",
+        json={"token": tokens[0], "password": "brand-new-passphrase"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    # Old password no longer works; new one does.
+    old = await client.post(
+        "/auth/jwt/login",
+        data={"username": "ana@example.com", "password": "old-passphrase"},
+    )
+    assert old.status_code == 400
+    new_token = await login(client, "ana@example.com", "brand-new-passphrase")
+    assert new_token
+
+
+async def test_reset_password_with_bad_token_is_rejected(client: AsyncClient) -> None:
+    resp = await client.post(
+        "/auth/reset-password",
+        json={"token": "not-a-real-token", "password": "whatever-passphrase"},
+    )
+    assert resp.status_code == 400

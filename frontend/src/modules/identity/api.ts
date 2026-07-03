@@ -40,6 +40,28 @@ export async function login(email: string, password: string): Promise<string> {
   return token.access_token;
 }
 
+/**
+ * Request a password-reset email. The backend always answers 202 whether or
+ * not the email is registered (non-enumerable by design), so this resolves
+ * regardless — the UI shows a neutral confirmation either way.
+ */
+export async function forgotPassword(email: string): Promise<void> {
+  await apiRequest<void>("/auth/forgot-password", {
+    method: "POST",
+    json: { email },
+    auth: false,
+  });
+}
+
+/** Complete a reset using the token from the emailed link. */
+export async function resetPassword(token: string, password: string): Promise<void> {
+  await apiRequest<void>("/auth/reset-password", {
+    method: "POST",
+    json: { token, password },
+    auth: false,
+  });
+}
+
 /** Fetch the current user (requires a valid token in the auth store). */
 export async function fetchMe(): Promise<SessionUser> {
   const user = await apiRequest<UserResponse>("/users/me");

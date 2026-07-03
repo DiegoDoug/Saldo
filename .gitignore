@@ -10,6 +10,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Stalwart (optional mail stack): runtime config + data are never committed.
+stalwart/data/
+
 # ---- Python / backend ----
 __pycache__/
 *.py[cod]

@@ -6,7 +6,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 
-import { fetchMe, login, register } from "./api";
+import { fetchMe, forgotPassword, login, register, resetPassword } from "./api";
 import { useAuthStore } from "./authStore";
 
 interface Credentials {
@@ -57,6 +57,19 @@ export function useRegister() {
         throw new PostRegisterLoginError(err);
       }
     },
+  });
+}
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: ({ email }: { email: string }) => forgotPassword(email),
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: ({ token, password }: { token: string; password: string }) =>
+      resetPassword(token, password),
   });
 }
 

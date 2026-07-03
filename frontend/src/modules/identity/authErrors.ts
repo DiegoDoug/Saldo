@@ -66,6 +66,32 @@ export function registerErrorMessage(error: unknown): string {
   }
 }
 
+/**
+ * Return a transport-level message (network / 5xx) if applicable, otherwise the
+ * provided fallback. Used where there is no meaningful field-level error code —
+ * e.g. forgot-password, which answers the same regardless of the account.
+ */
+export function transportOr(error: unknown, fallback: string): string {
+  return transportMessage(error) ?? fallback;
+}
+
+export function resetPasswordErrorMessage(error: unknown): string {
+  const transport = transportMessage(error);
+  if (transport) return transport;
+
+  const { code, reason } = detailOf(error);
+  switch (code) {
+    case "RESET_PASSWORD_BAD_TOKEN":
+      return "El enlace no es válido o ya caducó. Solicita uno nuevo.";
+    case "RESET_PASSWORD_INVALID_PASSWORD":
+      return reason
+        ? `Contraseña no válida: ${reason}`
+        : "La contraseña no cumple los requisitos.";
+    default:
+      return "No pudimos restablecer la contraseña. Inténtalo de nuevo.";
+  }
+}
+
 export function loginErrorMessage(error: unknown): string {
   const transport = transportMessage(error);
   if (transport) return transport;

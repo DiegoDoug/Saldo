@@ -27,6 +27,28 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_lifetime_seconds: int = 60 * 60 * 24 * 7  # 7 days
 
+    # --- Email / SMTP (password reset) ---------------------------------
+    # Saldo speaks plain SMTP to whatever mail server you point it at (Stalwart
+    # in the reference deploy — see `stalwart/README.md`). Leaving `smtp_host`
+    # blank disables real sending: emails are logged instead, which keeps
+    # local dev, tests, and the offline-first `docker compose up` free of any
+    # mail infrastructure.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "noreply@saldo.local"
+    smtp_starttls: bool = True
+
+    # Public base URL of the frontend, used to build the reset-password link
+    # that goes into recovery emails (e.g. `{url}/reset-password?token=...`).
+    frontend_base_url: str = "http://localhost:5173"
+
+    @property
+    def email_enabled(self) -> bool:
+        """True when a real SMTP host is configured; else emails are logged."""
+        return bool(self.smtp_host.strip())
+
     # --- CORS -----------------------------------------------------------
     # Comma-separated in the environment (SALDO_CORS_ORIGINS); exposed as a
     # parsed list via `cors_origins_list`.
