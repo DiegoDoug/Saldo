@@ -1,8 +1,8 @@
 """Outbound email for identity flows (currently: password reset).
 
 Saldo is a plain SMTP client — it does not run a mail server itself. Point it at
-one via the `SALDO_SMTP_*` settings; the reference deploy uses Mailu (see
-`mailu/README.md`). When no SMTP host is configured the message is logged
+one via the `SALDO_SMTP_*` settings; the reference deploy uses Stalwart (see
+`stalwart/README.md`). When no SMTP host is configured the message is logged
 instead of sent, so local dev, CI, and the offline-first `docker compose up`
 need no mail infrastructure.
 """

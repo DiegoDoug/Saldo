@@ -10,9 +10,8 @@ Thumbs.db
 .env.*
 !.env.example
 
-# Mailu (optional mail stack): real config + runtime data are never committed.
-mailu/mailu.env
-mailu/data/
+# Stalwart (optional mail stack): runtime config + data are never committed.
+stalwart/data/
 
 # ---- Python / backend ----
 __pycache__/

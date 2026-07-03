@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     jwt_lifetime_seconds: int = 60 * 60 * 24 * 7  # 7 days
 
     # --- Email / SMTP (password reset) ---------------------------------
-    # Saldo speaks plain SMTP to whatever mail server you point it at (Mailu
-    # in the reference deploy — see `mailu/README.md`). Leaving `smtp_host`
+    # Saldo speaks plain SMTP to whatever mail server you point it at (Stalwart
+    # in the reference deploy — see `stalwart/README.md`). Leaving `smtp_host`
     # blank disables real sending: emails are logged instead, which keeps
     # local dev, tests, and the offline-first `docker compose up` free of any
     # mail infrastructure.

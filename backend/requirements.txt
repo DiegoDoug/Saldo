@@ -21,5 +21,5 @@ aiosqlite==0.20.0
 # HTTP client for Frankfurter FX rates (Stage 5)
 httpx==0.28.1
 
-# Async SMTP client for password-reset emails (talks to Mailu; see mailu/)
+# Async SMTP client for password-reset emails (talks to Stalwart; see stalwart/)
 aiosmtplib==3.0.2
