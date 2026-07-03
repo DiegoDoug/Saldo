@@ -40,14 +40,37 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@saldo.local"
     smtp_starttls: bool = True
 
+    # Resend (https://resend.com) — an HTTP email API, an alternative to SMTP
+    # for hosts where outbound SMTP ports are blocked (most clouds / home ISPs),
+    # which is the usual reason to reach for a hosted sender. Set the API key to
+    # send via Resend; the "From" address is still `smtp_from` and must be a
+    # verified sender on your Resend domain (or `onboarding@resend.dev` in test).
+    resend_api_key: str = ""
+    resend_api_url: str = "https://api.resend.com/emails"
+
+    # Which transport `send_email` uses:
+    #   "auto"   — Resend if an API key is set, else SMTP if a host is set, else log
+    #   "resend" — force Resend (requires resend_api_key)
+    #   "smtp"   — force SMTP (e.g. the Mailpit sink in Docker, even with a key set)
+    #   "log"    — never send; just log the message
+    email_provider: str = "auto"
+
     # Public base URL of the frontend, used to build the reset-password link
     # that goes into recovery emails (e.g. `{url}/reset-password?token=...`).
     frontend_base_url: str = "http://localhost:5173"
 
     @property
-    def email_enabled(self) -> bool:
-        """True when a real SMTP host is configured; else emails are logged."""
-        return bool(self.smtp_host.strip())
+    def resolved_email_provider(self) -> str:
+        """The concrete transport to use — resolves "auto" against what's set."""
+        choice = self.email_provider.strip().lower()
+        if choice in {"resend", "smtp", "log"}:
+            return choice
+        # "auto" (or any unknown value): prefer Resend, then SMTP, then log.
+        if self.resend_api_key.strip():
+            return "resend"
+        if self.smtp_host.strip():
+            return "smtp"
+        return "log"
 
     # --- CORS -----------------------------------------------------------
     # Comma-separated in the environment (SALDO_CORS_ORIGINS); exposed as a

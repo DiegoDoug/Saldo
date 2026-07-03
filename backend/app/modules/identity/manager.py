@@ -36,13 +36,21 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         fastapi-users only calls this for an existing, active user, so the
         public `/auth/forgot-password` endpoint stays non-enumerable: it always
         answers 202 whether or not the email is registered.
+
+        A send failure (SMTP down, Resend outage, blocked port) is swallowed and
+        logged rather than raised: letting it bubble would turn into a 500 for
+        real accounts only — both a broken UX and an enumeration side-channel.
+        Delivery health is an ops concern, visible in logs/monitoring.
         """
         reset_url = f"{settings.frontend_base_url.rstrip('/')}/reset-password?token={token}"
-        await send_email(
-            to=user.email,
-            subject="Restablece tu contraseña de Saldo",
-            html=reset_password_email_html(reset_url),
-        )
+        try:
+            await send_email(
+                to=user.email,
+                subject="Restablece tu contraseña de Saldo",
+                html=reset_password_email_html(reset_url),
+            )
+        except Exception:
+            logger.exception("Failed to send password-reset email to user %s", user.id)
 
     async def on_after_reset_password(self, user: User, request: Request | None = None) -> None:
         logger.info("Password reset completed for user %s", user.id)

@@ -1,16 +1,20 @@
 """Outbound email for identity flows (currently: password reset).
 
-Saldo is a plain SMTP client — it does not run a mail server itself. Point it at
-one via the `SALDO_SMTP_*` settings; the reference deploy uses Stalwart (see
-`stalwart/README.md`). When no SMTP host is configured the message is logged
-instead of sent, so local dev, CI, and the offline-first `docker compose up`
-need no mail infrastructure.
+Saldo can send mail two ways, chosen by `SALDO_EMAIL_PROVIDER` (see config):
+  - **SMTP** — any mail server via the `SALDO_SMTP_*` settings. The reference
+    self-hosted deploy uses Stalwart (`stalwart/README.md`); the Docker test
+    sink uses Mailpit.
+  - **Resend** — the https://resend.com HTTP API, for hosts where outbound SMTP
+    ports are blocked. Set `SALDO_RESEND_API_KEY`.
+When neither is configured the message is logged instead of sent, so local dev,
+CI, and the offline-first `docker compose up` need no mail infrastructure.
 """
 
 import logging
 from email.message import EmailMessage
 
 import aiosmtplib
+import httpx
 
 from app.core.config import settings
 
@@ -18,13 +22,19 @@ logger = logging.getLogger("saldo.email")
 
 
 async def send_email(to: str, subject: str, html: str) -> None:
-    """Send (or, when email is disabled, log) a single HTML email."""
-    if not settings.email_enabled:
-        logger.info(
-            "Email disabled (no SALDO_SMTP_HOST). Would send to %s: %s\n%s", to, subject, html
-        )
+    """Send a single HTML email via the configured provider (or log it)."""
+    provider = settings.resolved_email_provider
+    if provider == "log":
+        logger.info("Email provider is 'log'. Would send to %s: %s\n%s", to, subject, html)
         return
+    if provider == "resend":
+        await _send_via_resend(to, subject, html)
+    else:
+        await _send_via_smtp(to, subject, html)
+    logger.info("Sent email to %s via %s: %s", to, provider, subject)
 
+
+async def _send_via_smtp(to: str, subject: str, html: str) -> None:
     message = EmailMessage()
     message["From"] = settings.smtp_from
     message["To"] = to
@@ -40,7 +50,19 @@ async def send_email(to: str, subject: str, html: str) -> None:
         password=settings.smtp_password or None,
         start_tls=settings.smtp_starttls,
     )
-    logger.info("Sent email to %s: %s", to, subject)
+
+
+async def _send_via_resend(to: str, subject: str, html: str) -> None:
+    # Uses httpx (already a dependency) rather than the Resend SDK, to keep the
+    # backend framework-light and consistent with the rest of the codebase.
+    payload = {"from": settings.smtp_from, "to": [to], "subject": subject, "html": html}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            settings.resend_api_url,
+            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+            json=payload,
+        )
+        resp.raise_for_status()
 
 
 def reset_password_email_html(reset_url: str) -> str:

@@ -133,6 +133,19 @@ async def test_reset_password_with_valid_token_changes_password(
     assert new_token
 
 
+async def test_forgot_password_stays_202_when_send_fails(client: AsyncClient, monkeypatch) -> None:
+    """A transport failure must not 500 (that would leak enumeration + break UX)."""
+
+    async def boom(to: str, subject: str, html: str) -> None:
+        raise RuntimeError("SMTP/Resend unavailable")
+
+    monkeypatch.setattr("app.modules.identity.manager.send_email", boom)
+
+    await register(client, "ana@example.com", "correct-passphrase")
+    resp = await client.post("/auth/forgot-password", json={"email": "ana@example.com"})
+    assert resp.status_code == 202
+
+
 async def test_reset_password_with_bad_token_is_rejected(client: AsyncClient) -> None:
     resp = await client.post(
         "/auth/reset-password",
