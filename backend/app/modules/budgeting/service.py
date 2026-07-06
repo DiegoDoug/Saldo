@@ -156,6 +156,9 @@ async def month_budget_actuals(
             select(Transaction).where(
                 Transaction.user_id == user_id,
                 Transaction.deleted == False,  # noqa: E712
+                # Count leaves only — split parents are excluded, their children
+                # carry the categorized amounts.
+                Transaction.split_parent == False,  # noqa: E712
                 Transaction.category_id != None,  # noqa: E711
                 Transaction.type != "transfer",
                 Transaction.date >= start,

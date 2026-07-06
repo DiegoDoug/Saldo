@@ -131,7 +131,8 @@ export function computeMonthVariance(
     (e) => e.categoryId,
   );
   const actuals = sumByCategory(
-    transactions.filter((t) => t.deleted === 0 && t.type !== "transfer"),
+    // Leaves only: split parents are containers, their children carry the spend.
+    transactions.filter((t) => t.deleted === 0 && t.splitParent !== 1 && t.type !== "transfer"),
     (t) => t.amount,
     (t) => t.categoryId,
   );

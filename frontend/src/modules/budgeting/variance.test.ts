@@ -30,6 +30,8 @@ function txn(partial: Partial<LocalTransaction>): LocalTransaction {
     merchantId: null,
     recurringId: null,
     categoryId: null,
+    splitParent: 0,
+    parentId: null,
     date: "2026-01-15",
     notes: "",
     tags: [],

@@ -10,6 +10,44 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 14 — Split transactions
+
+**Built**
+- `Transaction` gains `split_parent` (a container flag) and a self-referential
+  `parent_id`. A split is one parent row carrying the total (plus account/type/
+  date/note) and N child leaf rows, each with its own category and amount. This
+  reuses the entire transaction machinery — sync, tags, filters — with one table.
+- **One rule keeps the money honest:** every sum excludes `split_parent` rows and
+  counts the children. Applied to `account_deltas` (balances) and the variance
+  actuals query on both server and client, so a split never double-counts.
+- Alembic migration `c2d3e4f5a6b7` (batch mode for the self-FK; `split_parent`
+  backfilled to false via a dropped `server_default`). Verified upgrade + zero
+  autogenerate drift.
+- API: `POST /transactions/split` validates the sum invariant
+  (`Σ children == total`), that the split has ≥1 line, and that every referenced
+  account/merchant/category is owned, then writes parent + children atomically.
+- Sync: `TransactionSync` + the table-driven `_TX_FIELDS` carry the new columns.
+- Frontend: `LocalTransaction` extended; **Dexie v9** indexes `splitParent`/
+  `parentId` and backfills existing rows; mappers updated; `addSplit`/`deleteSplit`
+  in `localRepo` write the whole split in a single `rw` transaction guarded by a
+  pure, tested `splitChildrenSumTo` invariant; `accountDeltas` and the variance
+  hook skip split parents.
+
+**Verification**
+- Backend `pytest` green — split create, sum-mismatch rejection, foreign-category
+  rejection, and an end-to-end check that balance (−100 once) and variance (60 +
+  40 across two categories) count leaves not the parent. `ruff` clean.
+- Frontend `tsc` clean; `vitest` green — `splitChildrenSumTo` cases and an
+  `accountDeltas` split-exclusion case.
+
+**Open**
+- The split-editor UI and split-aware ledger grouping (a split currently syncs and
+  balances correctly, but the flat ledger list still shows parent and children as
+  separate rows) — deferred to the UI slice (plan Stage 16), along with the
+  category-manager and budget-vs-actual visualizations.
+
+---
+
 ## Stage 13 — Budget-vs-actual variance
 
 **Built**

@@ -273,6 +273,8 @@ _TX_FIELDS = (
     "merchant_id",
     "recurring_id",
     "category_id",
+    "split_parent",
+    "parent_id",
     "date",
     "notes",
     "tags",

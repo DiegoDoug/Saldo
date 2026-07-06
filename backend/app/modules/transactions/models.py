@@ -54,6 +54,15 @@ class Transaction(SQLModel, table=True):
         default=None, foreign_key="category.id", index=True
     )
 
+    # Splits: a `split_parent` row carries the total (plus account/type/date/note)
+    # but is excluded from every money sum; its child rows (`parent_id` set) are
+    # the leaves that actually count, each with its own category and amount.
+    # Modeling splits as child transactions reuses all the transaction machinery.
+    split_parent: bool = Field(default=False, index=True)
+    parent_id: uuid.UUID | None = Field(
+        default=None, foreign_key="transaction.id", index=True
+    )
+
     date: date_type = Field(index=True)
     notes: str = Field(default="", max_length=500)
     # JSON array of free-form tag strings.

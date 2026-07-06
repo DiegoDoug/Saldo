@@ -22,6 +22,8 @@ from app.modules.transactions.models import Transaction
 from app.modules.transactions.schemas import (
     BulkRequest,
     BulkResponse,
+    SplitCreate,
+    SplitRead,
     TransactionCreate,
     TransactionPage,
     TransactionRead,
@@ -31,6 +33,7 @@ from app.modules.transactions.schemas import (
 from app.modules.transactions.service import (
     TransactionFilters,
     apply_sort_page,
+    build_split_rows,
     count_select,
     filtered_select,
     get_owned_transaction,
@@ -186,6 +189,37 @@ def _apply_bulk(tx: Transaction, payload: BulkRequest) -> None:
     elif payload.action == "add_tag" and payload.tag and payload.tag not in tx.tags:
         # Reassign (not append) so SQLAlchemy notices the JSON column changed.
         tx.tags = [*tx.tags, payload.tag]
+
+
+@router.post("/split", response_model=SplitRead, status_code=status.HTTP_201_CREATED)
+async def create_split(payload: SplitCreate, user: CurrentUser, session: Session):
+    """Create a split: one parent container plus its categorized child leaves.
+
+    The children must sum to the total; each referenced account/merchant/category
+    must belong to the caller.
+    """
+    await _validate_refs(
+        session,
+        user.id,
+        {"account_id": payload.account_id, "merchant_id": payload.merchant_id},
+    )
+    for child in payload.children:
+        if child.category_id is not None and (
+            await get_owned_category(session, user.id, child.category_id) is None
+        ):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown category for this user")
+
+    parent, children = build_split_rows(user.id, payload)
+    if await session.get(Transaction, parent.id) is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "A transaction with this id already exists")
+    session.add(parent)
+    for child in children:
+        session.add(child)
+    await session.commit()
+    await session.refresh(parent)
+    for child in children:
+        await session.refresh(child)
+    return SplitRead(parent=parent, children=children)
 
 
 @router.post("/transfer", response_model=TransactionRead, status_code=status.HTTP_201_CREATED)

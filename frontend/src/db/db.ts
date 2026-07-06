@@ -70,6 +70,8 @@ export interface LocalTransaction {
   merchantId: string | null;
   recurringId: string | null;
   categoryId: string | null;
+  splitParent: 0 | 1; // 1 = a split container, excluded from money sums
+  parentId: string | null; // set on a split child, points at its parent
   date: string; // ISO date (YYYY-MM-DD)
   notes: string;
   tags: string[];
@@ -258,6 +260,22 @@ export class SaldoDB extends Dexie {
             c.parentId ??= null;
             c.color ??= null;
             c.icon ??= null;
+          });
+      });
+    // v9 adds transaction splits (splitParent/parentId indexes). Existing rows
+    // are non-splits, so backfill splitParent=0 / parentId=null on upgrade.
+    this.version(9)
+      .stores({
+        transactions:
+          "id, accountId, transferAccountId, type, categoryId, merchantId, date, deleted, updatedAt, splitParent, parentId",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<LocalTransaction>("transactions")
+          .toCollection()
+          .modify((t) => {
+            t.splitParent ??= 0;
+            t.parentId ??= null;
           });
       });
   }

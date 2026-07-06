@@ -126,6 +126,8 @@ class TransactionSync(BaseModel):
     merchant_id: uuid.UUID | None = None
     recurring_id: uuid.UUID | None = None
     category_id: uuid.UUID | None = None
+    split_parent: bool = False
+    parent_id: uuid.UUID | None = None
     date: date_type
     notes: str = ""
     tags: list[str] = []

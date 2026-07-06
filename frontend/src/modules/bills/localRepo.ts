@@ -98,6 +98,8 @@ export async function materializeRule(rule: LocalRecurringRule, until = todayIso
       merchantId: rule.merchantId,
       recurringId: rule.id,
       categoryId: rule.categoryId,
+      splitParent: 0,
+      parentId: null,
       date,
       notes: rule.notes,
       tags: [],

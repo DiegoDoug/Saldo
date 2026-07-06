@@ -14,6 +14,8 @@ function tx(partial: Partial<LocalTransaction>): LocalTransaction {
     merchantId: null,
     recurringId: null,
     categoryId: null,
+    splitParent: 0,
+    parentId: null,
     date: "2026-01-01",
     notes: "",
     tags: [],
@@ -45,5 +47,14 @@ describe("accountDeltas (mirrors backend account_deltas)", () => {
       tx({ type: "income", amount: 100, accountId: "a", deleted: 1 }),
     ]);
     expect(deltas.get("a")).toBeUndefined();
+  });
+
+  it("counts split children but not the split parent (no double count)", () => {
+    const deltas = accountDeltas([
+      tx({ type: "expense", amount: 100, accountId: "a", splitParent: 1 }),
+      tx({ type: "expense", amount: 60, accountId: "a", parentId: "p" }),
+      tx({ type: "expense", amount: 40, accountId: "a", parentId: "p" }),
+    ]);
+    expect(deltas.get("a")).toBe(-100);
   });
 });
