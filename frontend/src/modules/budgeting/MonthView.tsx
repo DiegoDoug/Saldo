@@ -47,7 +47,8 @@ export function MonthView() {
       key: c.id,
       label: c.name,
       value: amounts.get(c.id) ?? 0,
-      color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
+      // Prefer the category's own colour; fall back to the rotating palette.
+      color: c.color ?? CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
     }))
     .filter((d) => d.value > 0);
 

@@ -10,6 +10,49 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 17 — Category reorder & polish
+
+**Built**
+- **Drag-to-reorder** categories in the manager (dnd-kit, already in stack): each
+  sibling group (roots per kind, children per parent) is its own sortable list
+  with a grip handle; dropping persists `position` via a new `reorderCategories`
+  (one Dexie `rw` transaction, `updatedAt` bumped so it syncs).
+- **Month-view donut** now keys each slice on the category's own colour, falling
+  back to the rotating palette — so the breakdown, the budget-vs-actual bars, and
+  the category chips all read as one colour system.
+
+**Verification**
+- `tsc` clean; `vitest` 103 passing; `vite build` succeeds. Verified in the running
+  app: grip handles present on every category row, nesting preserved.
+
+---
+
+## Stage 16 — Tags (registry, colours, chips & manager)
+
+**Built**
+- **Tag registry** (`Tag`: name + colour + sync envelope) as a new `tags` backend
+  module — CRUD API, user-scoped, soft-deleted. A transaction's *membership* stays
+  in its existing `tags: string[]` JSON (which already syncs); this table is the
+  palette/identity behind those names, so no parallel membership store and no
+  churn to the transactions table. Alembic migration `d3e4f5a6b7c8`; zero drift.
+- **Sync**: `TagSync` round-trips through the generalized `_upsert_generic`
+  (backend) and a `mergeTags` (frontend) with LWW/tombstones; Dexie **v10** adds
+  the `tags` store.
+- **UI**: the transaction form gets a create-on-type tag multi-select (`TagInput`);
+  the ledger shows colored tag chips and clickable **tag filter chips**; a new
+  **tag manager** (`/tags`) lets you recolour, rename (rewrites the name across
+  every transaction that carries it, in one transaction), and delete. Chip colours
+  come from the registry with a deterministic name-hash fallback, so a tag is never
+  grey and never flickers.
+
+**Verification**
+- Backend `pytest` green (tag CRUD, sync round-trip, cross-user isolation); `ruff`
+  clean. Frontend `tsc` clean; `vitest` green (mapper round-trip + colour helper).
+- Verified in the running app: created a tagged transaction (existing + brand-new
+  tag), saw colored chips + filter chips, and recoloured a tag in the manager.
+
+---
+
 ## Stage 15 — Category-manager, split-editor & variance UI
 
 **Built**

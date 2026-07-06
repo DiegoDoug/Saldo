@@ -1,14 +1,32 @@
 /**
  * Category manager: a per-kind tree of categories with inline rename, add
- * subcategory, colour + icon pickers, and delete. Reads live from Dexie and
- * writes through localRepo (offline-first). The kind of a subcategory is
- * inherited from its root, matching the backend rule.
+ * subcategory, colour + icon pickers, delete, and drag-to-reorder within a
+ * sibling group. Reads live from Dexie and writes through localRepo
+ * (offline-first). A subcategory's kind is inherited from its root.
  */
 
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
+  GripVertical,
   Palette,
   Plus,
   Receipt,
@@ -28,6 +46,7 @@ import {
   addSubcategory,
   deleteCategory,
   renameCategory,
+  reorderCategories,
   setCategoryColor,
   setCategoryIcon,
 } from "./localRepo";
@@ -69,11 +88,7 @@ export function CategoryManager() {
             {title}
           </div>
           <div className="px-4 pb-3">
-            {forest
-              .filter((node) => node.kind === kind)
-              .map((node) => (
-                <CategoryTreeRow key={node.id} node={node} depth={0} />
-              ))}
+            <SortableGroup items={forest.filter((node) => node.kind === kind)} depth={0} />
             <button
               onClick={() => void addCategory("Nueva categoría", kind)}
               className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-2.5 text-sm font-semibold text-mint hover:border-mint hover:bg-mint-soft/40"
@@ -87,7 +102,38 @@ export function CategoryManager() {
   );
 }
 
-function CategoryTreeRow({ node, depth }: { node: CategoryNode; depth: number }) {
+/** A drag-sortable list of sibling categories (reorder persists their position). */
+function SortableGroup({ items, depth }: { items: CategoryNode[]; depth: number }) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function onDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = items.map((i) => i.id);
+    const next = arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id)));
+    void reorderCategories(next);
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+        {items.map((node) => (
+          <SortableCategoryRow key={node.id} node={node} depth={depth} />
+        ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function SortableCategoryRow({ node, depth }: { node: CategoryNode; depth: number }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: node.id,
+  });
   const [expanded, setExpanded] = useState(true);
   const [name, setName] = useState(node.name);
   const [picking, setPicking] = useState(false);
@@ -95,11 +141,22 @@ function CategoryTreeRow({ node, depth }: { node: CategoryNode; depth: number })
   const hasChildren = node.children.length > 0;
 
   return (
-    <div>
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+    >
       <div
-        className="flex items-center gap-2 border-t border-line py-2.5 first:border-t-0"
+        className="flex items-center gap-1.5 border-t border-line py-2.5 first:border-t-0"
         style={{ paddingLeft: depth * 18 }}
       >
+        <button
+          aria-label="Reordenar"
+          className="grid h-5 w-5 shrink-0 cursor-grab place-items-center text-line hover:text-ink-soft active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={14} />
+        </button>
         <button
           aria-label={hasChildren ? (expanded ? "Contraer" : "Expandir") : undefined}
           onClick={() => hasChildren && setExpanded((v) => !v)}
@@ -141,27 +198,16 @@ function CategoryTreeRow({ node, depth }: { node: CategoryNode; depth: number })
         >
           <Plus size={15} />
         </RowButton>
-        <RowButton
-          label={`Eliminar ${node.name}`}
-          danger
-          onClick={() => void deleteCategory(node.id)}
-        >
+        <RowButton label={`Eliminar ${node.name}`} danger onClick={() => void deleteCategory(node.id)}>
           <Trash2 size={15} />
         </RowButton>
       </div>
 
       {picking && (
-        <StylePicker
-          node={node}
-          onClose={() => setPicking(false)}
-          style={{ marginLeft: depth * 18 }}
-        />
+        <StylePicker node={node} onClose={() => setPicking(false)} style={{ marginLeft: depth * 18 }} />
       )}
 
-      {expanded &&
-        node.children.map((child) => (
-          <CategoryTreeRow key={child.id} node={child} depth={depth + 1} />
-        ))}
+      {expanded && hasChildren && <SortableGroup items={node.children} depth={depth + 1} />}
     </div>
   );
 }
@@ -200,9 +246,7 @@ function StylePicker({
         ))}
       </div>
 
-      <div className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">
-        Icono
-      </div>
+      <div className="mb-2 mt-3 text-xs font-semibold uppercase tracking-wide text-ink-soft">Icono</div>
       <div className="flex flex-wrap gap-1.5">
         <button
           aria-label="Sin icono"

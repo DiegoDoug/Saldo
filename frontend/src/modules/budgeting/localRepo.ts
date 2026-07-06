@@ -92,6 +92,16 @@ export async function setCategoryColor(id: string, color: string | null): Promis
   await db.categories.update(id, { color, updatedAt: nowIso() });
 }
 
+/** Persist a new sibling order: position becomes the index in `orderedIds`. */
+export async function reorderCategories(orderedIds: string[]): Promise<void> {
+  const ts = nowIso();
+  await db.transaction("rw", db.categories, async () => {
+    await Promise.all(
+      orderedIds.map((id, index) => db.categories.update(id, { position: index, updatedAt: ts })),
+    );
+  });
+}
+
 export async function setCategoryIcon(id: string, icon: string | null): Promise<void> {
   await db.categories.update(id, { icon, updatedAt: nowIso() });
 }
