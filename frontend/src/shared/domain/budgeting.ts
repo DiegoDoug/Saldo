@@ -104,6 +104,57 @@ export function computeMonth(m: MonthInput): MonthResult {
   };
 }
 
+export interface CategoryVariance {
+  budgeted: number;
+  actual: number;
+  remaining: number; // budgeted - actual (negative once actual overruns budget)
+  over: boolean; // actual strictly exceeds budget
+}
+
+export interface BudgetVariance {
+  byCategory: Record<string, CategoryVariance>;
+  budgetedTotal: number;
+  actualTotal: number;
+  remainingTotal: number;
+}
+
+/**
+ * Compare planned amounts (budgets) against realized amounts (actuals).
+ *
+ * Pure and identity-agnostic: both inputs are plain {category-key: amount} maps
+ * within a single currency. Every category appearing in *either* map gets a row.
+ * Keys are processed in sorted order so this mirrors the Python core exactly
+ * (backend/app/shared/domain/budgeting.py) and both agree to the cent.
+ */
+export function computeBudgetVariance(
+  budgetsByCategory: Record<string, number>,
+  actualsByCategory: Record<string, number>,
+): BudgetVariance {
+  const keys = Array.from(
+    new Set([...Object.keys(budgetsByCategory), ...Object.keys(actualsByCategory)]),
+  ).sort();
+  const byCategory: Record<string, CategoryVariance> = {};
+  for (const key of keys) {
+    const budgeted = round2(Number(budgetsByCategory[key]) || 0);
+    const actual = round2(Number(actualsByCategory[key]) || 0);
+    byCategory[key] = {
+      budgeted,
+      actual,
+      remaining: round2(budgeted - actual),
+      over: actual > budgeted,
+    };
+  }
+  const values = Object.values(byCategory);
+  const budgetedTotal = round2(values.reduce((s, v) => s + v.budgeted, 0));
+  const actualTotal = round2(values.reduce((s, v) => s + v.actual, 0));
+  return {
+    byCategory,
+    budgetedTotal,
+    actualTotal,
+    remainingTotal: round2(budgetedTotal - actualTotal),
+  };
+}
+
 export function computeYear(months: MonthInput[]): YearResult {
   const perMonth = months.map(computeMonth);
   const total = (select: (c: MonthResult) => number): number =>

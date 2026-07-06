@@ -14,10 +14,12 @@ from sqlmodel import select
 from app.core.db import get_session
 from app.modules.budgeting.models import Category, Entry, utcnow
 from app.modules.budgeting.schemas import (
+    BudgetVarianceSummary,
     CategoryCreate,
     CategoryRead,
     CategoryTreeNode,
     CategoryUpdate,
+    CategoryVarianceRow,
     EntryCreate,
     EntryRead,
     EntryUpdate,
@@ -30,11 +32,16 @@ from app.modules.budgeting.service import (
     get_owned_category,
     get_owned_entry,
     list_entries_for_year,
+    month_budget_actuals,
     validate_category_parent,
 )
 from app.modules.identity.dependencies import CurrentUser
 from app.shared.currency import FxRateProvider, get_fx_provider
-from app.shared.domain.budgeting import compute_month, compute_year
+from app.shared.domain.budgeting import (
+    compute_budget_variance,
+    compute_month,
+    compute_year,
+)
 
 router = APIRouter(prefix="/budgeting", tags=["budgeting"])
 
@@ -242,6 +249,23 @@ async def month_summary(year: int, month: int, user: CurrentUser, session: Sessi
     month_input = await build_month_input(entries, user.default_currency, fx)
     computed = compute_month(month_input)
     return _month_summary(year, month, computed)
+
+
+@router.get("/variance/{year}/{month}", response_model=BudgetVarianceSummary)
+async def budget_variance(year: int, month: int, user: CurrentUser, session: Session):
+    budgets, actuals = await month_budget_actuals(session, user.id, year, month)
+    variance = compute_budget_variance(budgets, actuals)
+    return BudgetVarianceSummary(
+        year=year,
+        month=month,
+        budgeted_total=variance.budgeted_total,
+        actual_total=variance.actual_total,
+        remaining_total=variance.remaining_total,
+        by_category=[
+            CategoryVarianceRow(category_id=uuid.UUID(cid), **vars(row))
+            for cid, row in variance.by_category.items()
+        ],
+    )
 
 
 @router.get("/summary/{year}", response_model=YearSummary)

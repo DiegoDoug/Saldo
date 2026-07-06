@@ -10,6 +10,36 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 13 — Budget-vs-actual variance
+
+**Built**
+- New pure domain function `compute_budget_variance(budgets, actuals)` in **both**
+  cores (`app/shared/domain/budgeting.py` and `shared/domain/budgeting.ts`),
+  returning per-category `{budgeted, actual, remaining, over}` plus totals. Keys
+  are processed in sorted order so the two languages agree to the cent; the
+  expected-value test tables are mirrored case-for-case (the cross-language
+  contract). Framework-free and identity-agnostic — it takes plain
+  `{category-key: amount}` maps, nothing about entries or transactions leaks in.
+- Backend endpoint `GET /budgeting/variance/{year}/{month}`: budgets come from the
+  month's categorized `Entry` amounts, actuals from that month's categorized
+  `Transaction` rows (transfers and goal entries excluded). All queries are
+  `user_id`-scoped; a `month_budget_actuals` service helper keeps the handler thin.
+- Frontend offline-first hook `useMonthVariance(year, month)` derives the same
+  view from local Dexie data (entries as budget, month's transactions as actuals)
+  via a pure, unit-tested `computeMonthVariance`.
+
+**Verification**
+- Backend `pytest` green (variance domain parity + endpoint compare + cross-user
+  scoping tests); `ruff` clean.
+- Frontend `tsc` clean; `vitest` green (mirrored variance parity table + the
+  `computeMonthVariance` filtering tests).
+
+**Open**
+- Split transactions (next slice) and the UI that renders variance as
+  budget-vs-actual progress bars per category (plan Stages 14–16).
+
+---
+
 ## Stage 12 — Category nesting, color & icon
 
 **Context**

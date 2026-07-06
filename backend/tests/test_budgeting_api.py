@@ -224,6 +224,89 @@ async def test_year_summary_aggregates(client: AsyncClient) -> None:
 
 
 # ----------------------------------------------------------------------
+# Budget-vs-actual variance
+# ----------------------------------------------------------------------
+async def _make_account(client: AsyncClient, h: dict) -> str:
+    resp = await client.post(
+        "/accounts", json={"name": "Checking", "type": "checking"}, headers=h
+    )
+    return resp.json()["id"]
+
+
+async def test_budget_variance_compares_entries_to_transactions(client: AsyncClient) -> None:
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+    aid = await _make_account(client, h)
+    cat = await client.post(
+        "/budgeting/categories", json={"name": "Súper", "kind": "variable"}, headers=h
+    )
+    cid = cat.json()["id"]
+
+    # Budget 200 for the category this month.
+    await client.post(
+        "/budgeting/entries",
+        json={"year": 2026, "month": 0, "kind": "variable", "amount": 200, "category_id": cid},
+        headers=h,
+    )
+    # Actual spend 120 + 100 = 220 (overspent). A transfer must not count.
+    for amt in (120, 100):
+        await client.post(
+            "/transactions",
+            json={"type": "expense", "amount": amt, "account_id": aid,
+                  "date": "2026-01-10", "category_id": cid},
+            headers=h,
+        )
+    await client.post(
+        "/transactions",
+        json={"type": "transfer", "amount": 999, "account_id": aid,
+              "transfer_account_id": aid, "date": "2026-01-10", "category_id": cid},
+        headers=h,
+    )
+    # A transaction in another month must not leak in.
+    await client.post(
+        "/transactions",
+        json={"type": "expense", "amount": 500, "account_id": aid,
+              "date": "2026-02-10", "category_id": cid},
+        headers=h,
+    )
+
+    resp = await client.get("/budgeting/variance/2026/0", headers=h)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["budgeted_total"] == 200
+    assert body["actual_total"] == 220
+    assert body["remaining_total"] == -20
+    row = next(r for r in body["by_category"] if r["category_id"] == cid)
+    assert row["actual"] == 220
+    assert row["over"] is True
+
+
+async def test_budget_variance_is_user_scoped(client: AsyncClient) -> None:
+    ana = await auth_headers(client, "ana@example.com", "ana-passphrase")
+    beto = await auth_headers(client, "beto@example.com", "beto-passphrase")
+    aid = await _make_account(client, ana)
+    cat = await client.post(
+        "/budgeting/categories", json={"name": "Súper", "kind": "variable"}, headers=ana
+    )
+    cid = cat.json()["id"]
+    await client.post(
+        "/budgeting/entries",
+        json={"year": 2026, "month": 0, "kind": "variable", "amount": 200, "category_id": cid},
+        headers=ana,
+    )
+    await client.post(
+        "/transactions",
+        json={"type": "expense", "amount": 50, "account_id": aid,
+              "date": "2026-01-10", "category_id": cid},
+        headers=ana,
+    )
+    # Beto's variance is empty; Ana's is intact.
+    beto_var = await client.get("/budgeting/variance/2026/0", headers=beto)
+    ana_var = await client.get("/budgeting/variance/2026/0", headers=ana)
+    assert beto_var.json()["actual_total"] == 0
+    assert ana_var.json()["actual_total"] == 50
+
+
+# ----------------------------------------------------------------------
 # Cross-user isolation (the security invariant)
 # ----------------------------------------------------------------------
 async def test_second_user_cannot_read_or_mutate_first_users_data(client: AsyncClient) -> None:

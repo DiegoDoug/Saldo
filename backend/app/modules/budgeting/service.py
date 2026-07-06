@@ -11,6 +11,7 @@ the core understands.
 
 import uuid
 from collections.abc import Callable, Sequence
+from datetime import date
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,7 @@ from sqlmodel import select
 
 from app.modules.budgeting.models import Category, Entry
 from app.modules.budgeting.schemas import CategoryTreeNode
+from app.modules.transactions.models import Transaction
 from app.shared.domain.budgeting import MonthInput
 
 # A defensive cap so a pre-existing corrupt parent chain can't spin forever.
@@ -116,6 +118,59 @@ async def list_entries_for_year(
         )
     )
     return list(result.scalars().all())
+
+
+def _month_bounds(year: int, month: int) -> tuple[date, date]:
+    """Half-open [start, end) date range for a (year, month 0-11) pair."""
+    start = date(year, month + 1, 1)
+    end = date(year + 1, 1, 1) if month == 11 else date(year, month + 2, 1)
+    return start, end
+
+
+async def month_budget_actuals(
+    session: AsyncSession, user_id: uuid.UUID, year: int, month: int
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Per-category budgets (from entries) and actuals (from transactions).
+
+    Budgets are the month's categorized entry amounts (goal entries carry no
+    category and are excluded). Actuals are the month's categorized transactions,
+    transfers excluded (they move money between accounts rather than spend it).
+    Single-currency amounts, matching the domain core's assumption.
+    """
+    entry_rows = (
+        await session.execute(
+            select(Entry).where(
+                Entry.user_id == user_id,
+                Entry.year == year,
+                Entry.month == month,
+                Entry.deleted == False,  # noqa: E712
+                Entry.category_id != None,  # noqa: E711
+                Entry.kind != "goal",
+            )
+        )
+    ).scalars().all()
+
+    start, end = _month_bounds(year, month)
+    tx_rows = (
+        await session.execute(
+            select(Transaction).where(
+                Transaction.user_id == user_id,
+                Transaction.deleted == False,  # noqa: E712
+                Transaction.category_id != None,  # noqa: E711
+                Transaction.type != "transfer",
+                Transaction.date >= start,
+                Transaction.date < end,
+            )
+        )
+    ).scalars().all()
+
+    budgets: dict[str, float] = {}
+    for e in entry_rows:
+        budgets[str(e.category_id)] = budgets.get(str(e.category_id), 0.0) + e.amount
+    actuals: dict[str, float] = {}
+    for t in tx_rows:
+        actuals[str(t.category_id)] = actuals.get(str(t.category_id), 0.0) + t.amount
+    return budgets, actuals
 
 
 def entries_to_month_input(

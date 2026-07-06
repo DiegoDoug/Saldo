@@ -110,6 +110,23 @@ class MonthSummary(BaseModel):
     overspend: bool
 
 
+class CategoryVarianceRow(BaseModel):
+    category_id: uuid.UUID
+    budgeted: float
+    actual: float
+    remaining: float
+    over: bool
+
+
+class BudgetVarianceSummary(BaseModel):
+    year: int
+    month: int
+    budgeted_total: float
+    actual_total: float
+    remaining_total: float
+    by_category: list[CategoryVarianceRow]
+
+
 class YearSummary(BaseModel):
     year: int
     income_total: float

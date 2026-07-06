@@ -6,10 +6,12 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 
-import { db, type LocalCategory, type LocalEntry } from "../../db/db";
+import { db, type LocalCategory, type LocalEntry, type LocalTransaction } from "../../db/db";
 import {
+  computeBudgetVariance,
   computeMonth,
   computeYear,
+  type BudgetVariance,
   type MonthResult,
   type YearResult,
 } from "../../shared/domain/budgeting";
@@ -98,4 +100,51 @@ export function goalAmount(entries: LocalEntry[]): number {
   return entries
     .filter((e) => e.deleted === 0 && e.kind === "goal")
     .reduce((s, e) => s + e.amount, 0);
+}
+
+/** Zero-padded `YYYY-MM` prefix for a (year, month 0-11) pair. */
+function monthDatePrefix(year: number, month: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+function sumByCategory<T>(rows: T[], amountOf: (r: T) => number, keyOf: (r: T) => string | null) {
+  const map: Record<string, number> = {};
+  for (const row of rows) {
+    const key = keyOf(row);
+    if (key) map[key] = (map[key] ?? 0) + amountOf(row);
+  }
+  return map;
+}
+
+/**
+ * Budget-vs-actual for a month: category `Entry` amounts are the budget, and the
+ * month's categorized `Transaction` rows (transfers excluded — they move money,
+ * they don't spend it) are the actuals. Pure, so it is unit-tested without Dexie.
+ */
+export function computeMonthVariance(
+  entries: LocalEntry[],
+  transactions: LocalTransaction[],
+): BudgetVariance {
+  const budgets = sumByCategory(
+    entries.filter((e) => e.deleted === 0 && e.kind !== "goal"),
+    (e) => e.amount,
+    (e) => e.categoryId,
+  );
+  const actuals = sumByCategory(
+    transactions.filter((t) => t.deleted === 0 && t.type !== "transfer"),
+    (t) => t.amount,
+    (t) => t.categoryId,
+  );
+  return computeBudgetVariance(budgets, actuals);
+}
+
+export function useMonthVariance(year: number, month: number): BudgetVariance {
+  const entries = useMonthEntries(year, month);
+  const prefix = monthDatePrefix(year, month);
+  const transactions =
+    useLiveQuery(
+      () => db.transactions.where("date").startsWith(prefix).toArray(),
+      [prefix],
+    ) ?? [];
+  return computeMonthVariance(entries, transactions);
 }
