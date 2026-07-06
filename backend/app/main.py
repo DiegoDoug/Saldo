@@ -67,6 +67,11 @@ def create_app() -> FastAPI:
 
     app.include_router(merchants_router)
 
+    # --- Tags -----------------------------------------------------------
+    from app.modules.tags.router import router as tags_router
+
+    app.include_router(tags_router)
+
     # --- Bills / recurring rules ----------------------------------------
     from app.modules.bills.router import router as bills_router
 

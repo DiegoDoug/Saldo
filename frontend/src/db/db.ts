@@ -166,6 +166,19 @@ export interface LocalMerchant {
   deleted: 0 | 1;
 }
 
+/**
+ * A tag registry row: gives a tag name a stable colour and manageable identity.
+ * A transaction's membership stays in its `tags: string[]` (by name); this table
+ * is the palette/registry behind those names.
+ */
+export interface LocalTag {
+  id: string;
+  name: string;
+  color: string;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
 /** Mirror of the authenticated User (one row: the current profile). */
 export interface LocalProfile {
   id: string;
@@ -209,6 +222,7 @@ export class SaldoDB extends Dexie {
   assets!: Table<LocalAsset, string>;
   liabilities!: Table<LocalLiability, string>;
   netWorthSnapshots!: Table<LocalNetWorthSnapshot, string>;
+  tags!: Table<LocalTag, string>;
 
   constructor() {
     super("saldo");
@@ -278,6 +292,10 @@ export class SaldoDB extends Dexie {
             t.parentId ??= null;
           });
       });
+    // v10 adds the tag registry (name + colour), additive.
+    this.version(10).stores({
+      tags: "id, name, deleted, updatedAt",
+    });
   }
 }
 

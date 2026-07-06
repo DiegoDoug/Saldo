@@ -11,6 +11,10 @@ import { formatMoney, parseAmount } from "../../shared/format";
 import { useAccounts } from "../accounts/hooks";
 import { useCategories } from "../budgeting/hooks";
 import { useMerchants } from "../merchants/hooks";
+import { useTagColors, useUsedTagNames } from "../tags/hooks";
+import { ensureTags } from "../tags/localRepo";
+import { tagColor } from "../tags/tagColor";
+import { TagInput } from "../tags/TagInput";
 import { EmptyState } from "../../shared/ui/EmptyState";
 import { useTransactions, type TransactionFilters } from "./hooks";
 import {
@@ -29,11 +33,16 @@ export function TransactionsPage() {
   const [filters, setFilters] = useState<TransactionFilters>({ sort: "date", order: "desc" });
   const transactions = useTransactions(filters);
   const [adding, setAdding] = useState(false);
+  const tagColors = useTagColors();
+  const usedTags = useUsedTagNames();
 
   const accountName = useMemo(
     () => new Map(accounts.map((a) => [a.id, a.name])),
     [accounts],
   );
+
+  const toggleTagFilter = (name: string) =>
+    setFilters((f) => ({ ...f, tag: f.tag === name ? undefined : name }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -71,6 +80,31 @@ export function TransactionsPage() {
         </select>
       </div>
 
+      {usedTags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" aria-label="Filtrar por etiqueta">
+          {usedTags.map((name) => {
+            const active = filters.tag === name;
+            const color = tagColor(name, tagColors);
+            return (
+              <button
+                key={name}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleTagFilter(name)}
+                className="rounded-full px-2.5 py-1 text-xs font-semibold transition"
+                style={
+                  active
+                    ? { background: color, color: "#fff" }
+                    : { background: `${color}22`, color }
+                }
+              >
+                {name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {adding && <AddTransactionForm onDone={() => setAdding(false)} />}
 
       {accounts.length === 0 ? (
@@ -92,7 +126,7 @@ export function TransactionsPage() {
           {transactions
             .filter((t) => !t.parentId)
             .map((t) => (
-              <TransactionRow key={t.id} tx={t} accountName={accountName} />
+              <TransactionRow key={t.id} tx={t} accountName={accountName} tagColors={tagColors} />
             ))}
         </ul>
       )}
@@ -103,9 +137,11 @@ export function TransactionsPage() {
 function TransactionRow({
   tx,
   accountName,
+  tagColors,
 }: {
   tx: LocalTransaction;
   accountName: Map<string, string>;
+  tagColors: Map<string, string>;
 }) {
   const signed = tx.amount * SIGN[tx.type];
   const isTransfer = tx.type === "transfer";
@@ -129,6 +165,22 @@ function TransactionRow({
           )}
           <span>· {tx.date}</span>
         </p>
+        {tx.tags.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {tx.tags.map((name) => {
+              const color = tagColor(name, tagColors);
+              return (
+                <span
+                  key={name}
+                  className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                  style={{ background: `${color}22`, color }}
+                >
+                  {name}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <span
@@ -169,6 +221,7 @@ function AddTransactionForm({ onDone }: { onDone: () => void }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [split, setSplit] = useState(false);
   const [lines, setLines] = useState<SplitLine[]>([{ categoryId: "", amount: "" }]);
+  const [tags, setTags] = useState<string[]>([]);
 
   const account = accounts.find((a) => a.id === accountId);
   const total = parseAmount(amount);
@@ -183,6 +236,7 @@ function AddTransactionForm({ onDone }: { onDone: () => void }) {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!accountId || total <= 0) return;
+    if (splittable && tags.length) await ensureTags(tags);
     if (split && splittable) {
       if (!splitOk) return;
       await addSplit(total, {
@@ -192,6 +246,7 @@ function AddTransactionForm({ onDone }: { onDone: () => void }) {
         merchantId: merchantId || null,
         date,
         notes,
+        tags,
         children: splitChildren,
       });
       onDone();
@@ -217,6 +272,7 @@ function AddTransactionForm({ onDone }: { onDone: () => void }) {
         merchantId: merchantId || null,
         date,
         notes,
+        tags,
       });
     }
     onDone();
@@ -336,6 +392,8 @@ function AddTransactionForm({ onDone }: { onDone: () => void }) {
           ))}
         </select>
       )}
+
+      {type !== "transfer" && <TagInput value={tags} onChange={setTags} />}
 
       <input
         className="field-input"

@@ -7,6 +7,7 @@ import type { WireCategory, WireEntry } from "../budgeting/mappers";
 import type { WireGoal } from "../goals/mappers";
 import type { WireMerchant } from "../merchants/mappers";
 import type { WireAsset, WireLiability, WireSnapshot } from "../networth/mappers";
+import type { WireTag } from "../tags/mappers";
 import type { WireTransaction } from "../transactions/mappers";
 
 interface SyncResponse {
@@ -20,6 +21,7 @@ interface SyncResponse {
   snapshots?: WireSnapshot[];
   categories: WireCategory[];
   entries: WireEntry[];
+  tags?: WireTag[];
   server_time: string;
 }
 
@@ -34,6 +36,7 @@ export interface PushPayload {
   snapshots?: unknown[];
   categories?: unknown[];
   entries?: unknown[];
+  tags?: unknown[];
 }
 
 export function pushSync(payload: PushPayload): Promise<SyncResponse> {
@@ -50,6 +53,7 @@ export function pushSync(payload: PushPayload): Promise<SyncResponse> {
       snapshots: payload.snapshots ?? [],
       categories: payload.categories ?? [],
       entries: payload.entries ?? [],
+      tags: payload.tags ?? [],
     },
   });
 }
