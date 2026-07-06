@@ -12,7 +12,7 @@ Saldo is an offline-first, self-hosted personal finance app: React/Vite/TS PWA +
 
 1. **The original product** — Spanish-vocabulary envelope budgeting (`nomina`, `otros`, `gastos fijos/variables`, `ahorro`) over `Category` + `Entry`, with a pure, mirrored Python/TS compute core (`compute_month`/`compute_year`), a customizable widget dashboard, and Dexie↔SQLite last-write-wins sync.
 2. **The "finance platform" expansion** (PRs #9–#10) — Accounts, Transactions, Merchants, Recurring rules/Bills, Goals, Assets/Liabilities/Net worth, Reports, Forecast: eight new backend modules, eight new frontend modules, seven Dexie schema versions, nine Alembic migrations, all folded into the same sync envelope.
-3. **Auth polish** (PRs #11–#12) — password reset over SMTP, with Stalwart/Mailpit reference setups.
+3. **Auth polish** (PRs #11–#12) — password reset email delivered via Resend.
 
 Deployment is Docker Compose (nginx + uvicorn + cloudflared) targeted at a Raspberry Pi, with multi-arch GHCR images from CI and an S3 backup script.
 

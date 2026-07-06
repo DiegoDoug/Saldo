@@ -18,8 +18,5 @@ argon2-cffi==23.1.0
 # Async SQLite driver (fastapi-users is async)
 aiosqlite==0.20.0
 
-# HTTP client for Frankfurter FX rates (Stage 5)
+# HTTP client for Frankfurter FX rates (Stage 5) and Resend password-reset email
 httpx==0.28.1
-
-# Async SMTP client for password-reset emails (talks to Stalwart; see stalwart/)
-aiosmtplib==3.0.2

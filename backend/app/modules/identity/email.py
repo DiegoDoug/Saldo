@@ -1,45 +1,46 @@
 """Outbound email for identity flows (currently: password reset).
 
-Saldo is a plain SMTP client — it does not run a mail server itself. Point it at
-one via the `SALDO_SMTP_*` settings; the reference deploy uses Stalwart (see
-`stalwart/README.md`). When no SMTP host is configured the message is logged
-instead of sent, so local dev, CI, and the offline-first `docker compose up`
-need no mail infrastructure.
+Saldo sends its one recovery email through Resend (https://resend.com) over its
+HTTPS API — there is no self-hosted mail server. Point it at Resend via the
+`SALDO_RESEND_API_KEY` / `SALDO_EMAIL_FROM` settings. When no API key is
+configured the message is logged instead of sent, so local dev, CI, and the
+offline-first `docker compose up` need no mail infrastructure.
 """
 
 import logging
-from email.message import EmailMessage
 
-import aiosmtplib
+import httpx
 
 from app.core.config import settings
 
 logger = logging.getLogger("saldo.email")
 
+RESEND_API_URL = "https://api.resend.com/emails"
+
 
 async def send_email(to: str, subject: str, html: str) -> None:
-    """Send (or, when email is disabled, log) a single HTML email."""
+    """Send (or, when email is disabled, log) a single HTML email via Resend."""
     if not settings.email_enabled:
         logger.info(
-            "Email disabled (no SALDO_SMTP_HOST). Would send to %s: %s\n%s", to, subject, html
+            "Email disabled (no SALDO_RESEND_API_KEY). Would send to %s: %s\n%s",
+            to,
+            subject,
+            html,
         )
         return
 
-    message = EmailMessage()
-    message["From"] = settings.smtp_from
-    message["To"] = to
-    message["Subject"] = subject
-    message.set_content("Este mensaje requiere un cliente que soporte HTML.")
-    message.add_alternative(html, subtype="html")
-
-    await aiosmtplib.send(
-        message,
-        hostname=settings.smtp_host,
-        port=settings.smtp_port,
-        username=settings.smtp_user or None,
-        password=settings.smtp_password or None,
-        start_tls=settings.smtp_starttls,
-    )
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            RESEND_API_URL,
+            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+            json={
+                "from": settings.email_from,
+                "to": [to],
+                "subject": subject,
+                "html": html,
+            },
+        )
+    response.raise_for_status()
     logger.info("Sent email to %s: %s", to, subject)
 
 
