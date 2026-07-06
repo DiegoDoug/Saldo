@@ -10,6 +10,40 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 15 — Category-manager, split-editor & variance UI
+
+**Built**
+- **Category manager** (`/categories`, new nav entry under *Dinero*): a per-kind
+  tree with expand/collapse, inline rename, add root/subcategory (subcategory
+  inherits its parent's kind), delete (cascades the subtree), and an inline
+  colour + lucide-icon picker. Curated icon set in `categoryIcons.ts` so a stored
+  icon name is a safe lookup, never a dynamic import.
+- **Split editor** in the transaction form: a *"Dividir en categorías"* toggle
+  swaps the single category select for a line editor (category + amount rows,
+  add/remove line) with a live *Suma / Faltan* balance readout; Guardar is
+  disabled until the lines sum to the total. Submits through `addSplit`. The
+  ledger now shows a split once — as its parent row with a *Dividido* badge —
+  and hides the child leaves; deleting a split removes the whole subtree.
+- **Budget-vs-actual visualization** (`BudgetVsActual`, rendered in the month
+  view): per-category progress bars (actual vs budget) coloured by the category's
+  colour, over-budget in coral, with a header showing the month's remaining/over
+  total. Driven by the pure `useMonthVariance` hook.
+
+**Verification**
+- `tsc` clean; `vitest` 100 passing; production `vite build` succeeds.
+- **Verified in the running app** (backend + Vite + headless Chromium): logged in
+  against a seeded demo user and captured all three screens rendering correctly —
+  nested categories with colour/icon pickers, budget-vs-actual bars (Súper over
+  at 280/200 counting a split child, Ocio under at 70/80), and the split editor
+  with live sum validation. No runtime/console JS errors.
+
+**Open**
+- Drag-to-reorder in the category manager and a recurring-rules manager remain
+  from the plan's Stage 16/17 wishlist; the current bills module already covers
+  recurring templates.
+
+---
+
 ## Stage 14 — Split transactions
 
 **Built**

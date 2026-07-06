@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AccountsPage } from "./modules/accounts/AccountsPage";
 import { BillsPage } from "./modules/bills/BillsPage";
 import { BudgetingLayout } from "./modules/budgeting/BudgetingLayout";
+import { CategoryManager } from "./modules/budgeting/CategoryManager";
 import { MonthView } from "./modules/budgeting/MonthView";
 import { YearView } from "./modules/budgeting/YearView";
 import { DashboardPage } from "./modules/dashboard/DashboardPage";
@@ -35,6 +36,7 @@ export function App() {
       >
         <Route path="/" element={<DashboardPage />} />
         <Route path="/month/:month" element={<MonthView />} />
+        <Route path="/categories" element={<CategoryManager />} />
         <Route path="/year" element={<YearView />} />
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
