@@ -322,6 +322,9 @@ async def _upsert_category(
             name=incoming.name,
             kind=incoming.kind,
             position=incoming.position,
+            parent_id=incoming.parent_id,
+            color=incoming.color,
+            icon=incoming.icon,
             created_at=inc_ts,
             updated_at=inc_ts,
             deleted=incoming.deleted,
@@ -334,6 +337,9 @@ async def _upsert_category(
         existing.name = incoming.name
         existing.kind = incoming.kind
         existing.position = incoming.position
+        existing.parent_id = incoming.parent_id
+        existing.color = incoming.color
+        existing.icon = incoming.icon
         existing.deleted = incoming.deleted
         existing.updated_at = inc_ts
         session.add(existing)

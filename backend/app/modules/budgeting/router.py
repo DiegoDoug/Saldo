@@ -16,6 +16,7 @@ from app.modules.budgeting.models import Category, Entry, utcnow
 from app.modules.budgeting.schemas import (
     CategoryCreate,
     CategoryRead,
+    CategoryTreeNode,
     CategoryUpdate,
     EntryCreate,
     EntryRead,
@@ -24,10 +25,12 @@ from app.modules.budgeting.schemas import (
     YearSummary,
 )
 from app.modules.budgeting.service import (
+    build_category_tree,
     build_month_input,
     get_owned_category,
     get_owned_entry,
     list_entries_for_year,
+    validate_category_parent,
 )
 from app.modules.identity.dependencies import CurrentUser
 from app.shared.currency import FxRateProvider, get_fx_provider
@@ -50,9 +53,15 @@ async def create_category(payload: CategoryCreate, user: CurrentUser, session: S
         name=payload.name,
         kind=payload.kind,
         position=payload.position,
+        parent_id=payload.parent_id,
+        color=payload.color,
+        icon=payload.icon,
     )
     if await session.get(Category, category.id) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "A category with this id already exists")
+    await validate_category_parent(
+        session, user.id, category_id=category.id, parent_id=category.parent_id, kind=category.kind
+    )
     session.add(category)
     await session.commit()
     await session.refresh(category)
@@ -69,6 +78,17 @@ async def list_categories(user: CurrentUser, session: Session, include_deleted: 
     return list(result.scalars().all())
 
 
+@router.get("/categories/tree", response_model=list[CategoryTreeNode])
+async def category_tree(user: CurrentUser, session: Session):
+    stmt = (
+        select(Category)
+        .where(Category.user_id == user.id, Category.deleted == False)  # noqa: E712
+        .order_by(Category.kind, Category.position)
+    )
+    result = await session.execute(stmt)
+    return build_category_tree(list(result.scalars().all()))
+
+
 @router.patch("/categories/{category_id}", response_model=CategoryRead)
 async def update_category(
     category_id: uuid.UUID, payload: CategoryUpdate, user: CurrentUser, session: Session
@@ -79,6 +99,12 @@ async def update_category(
     data = payload.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(category, key, value)
+    # Validate the resulting parent link (kind must match the possibly-updated kind).
+    if "parent_id" in data or "kind" in data:
+        await validate_category_parent(
+            session, user.id, category_id=category.id,
+            parent_id=category.parent_id, kind=category.kind,
+        )
     category.updated_at = utcnow()
     session.add(category)
     await session.commit()

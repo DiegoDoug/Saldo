@@ -40,6 +40,14 @@ class Category(SQLModel, table=True):
     kind: str = Field(max_length=16)  # one of CATEGORY_KINDS
     position: int = Field(default=0)  # display ordering within its kind
 
+    # Nesting: a subcategory points at its parent. A child inherits `kind` from
+    # its root, so every category in a tree shares one kind. `None` = a root.
+    parent_id: uuid.UUID | None = Field(
+        default=None, foreign_key="category.id", index=True
+    )
+    color: str | None = Field(default=None, max_length=9)  # hex, e.g. #6EE7B7
+    icon: str | None = Field(default=None, max_length=40)  # lucide icon name
+
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     deleted: bool = Field(default=False, index=True)

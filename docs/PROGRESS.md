@@ -10,6 +10,50 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 12 — Category nesting, color & icon
+
+**Context**
+- Implements the first slice of `docs/plans/financial_feature_imp_plan.md`,
+  **adapted** to the current codebase. The plan pre-dates the finance-platform
+  work (accounts, a full `transactions` ledger, merchants, bills, goals, net
+  worth, reports, forecast), so its central move — "add a `Transaction` table" —
+  is already satisfied differently. Rather than duplicate that, we build the
+  plan's still-missing, non-conflicting pieces onto the existing architecture.
+  Category nesting/color/icon is the cleanest such piece and lands first.
+
+**Built**
+- `Category` gains three additive columns: a self-referential `parent_id`
+  (nesting), plus optional `color` (hex) and `icon` (lucide name). A child
+  **inherits its root's `kind`**, so a whole tree shares one kind.
+- Alembic migration `b1c2d3e4f5a6` (batch mode — SQLite recreates the table for
+  the self-FK). Verified `alembic upgrade head` on a fresh DB and confirmed
+  **zero autogenerate drift** against the model.
+- API: `create/update` accept the new fields and validate the parent link
+  (owned-by-user, kind match, no cycles, self-parent rejected, depth-capped) via
+  a `validate_category_parent` service helper. New `GET /budgeting/categories/tree`
+  returns the nested forest (orphans surface as roots) through a
+  `CategoryTreeNode` schema. Handlers stay under 30 lines.
+- Sync: `CategorySync` + `_upsert_category` round-trip `parent_id/color/icon`
+  (LWW/tombstones unchanged).
+- Frontend data layer: `LocalCategory` extended; **Dexie v8** adds a `parentId`
+  index and backfills existing rows to `null` on upgrade; mappers, `localRepo`
+  (`addSubcategory`, `setCategoryColor/Icon`, subtree-cascading delete), and a
+  `useCategoryTree` hook + `buildCategoryForest`.
+
+**Verification**
+- Backend `pytest` green; new tests cover the tree, cross-kind rejection, cycle
+  and self-parent rejection, cross-user parent ownership, and a sync round-trip
+  of the new fields. `ruff` clean.
+- Frontend `tsc` clean; `vitest` green including new forest + mapper round-trip
+  tests.
+
+**Open**
+- Budget-vs-actual variance in the domain core (next slice), split transactions,
+  and the category-manager UI (color/icon pickers, drag-reorder) per the plan's
+  Stages 13–16.
+
+---
+
 ## Stage 11 — Open-source polish
 
 **Built**

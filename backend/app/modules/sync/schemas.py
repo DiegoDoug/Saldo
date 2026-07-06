@@ -138,6 +138,9 @@ class CategorySync(BaseModel):
     name: str
     kind: Literal["income", "fixed", "variable"]
     position: int = 0
+    parent_id: uuid.UUID | None = None
+    color: str | None = None
+    icon: str | None = None
     updated_at: datetime
     deleted: bool = False
 

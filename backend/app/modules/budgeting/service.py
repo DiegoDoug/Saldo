@@ -12,11 +12,16 @@ the core understands.
 import uuid
 from collections.abc import Callable, Sequence
 
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.modules.budgeting.models import Category, Entry
+from app.modules.budgeting.schemas import CategoryTreeNode
 from app.shared.domain.budgeting import MonthInput
+
+# A defensive cap so a pre-existing corrupt parent chain can't spin forever.
+_MAX_CATEGORY_DEPTH = 64
 
 
 async def get_owned_entry(
@@ -35,6 +40,69 @@ async def get_owned_category(
     if category is None or category.user_id != user_id:
         return None
     return category
+
+
+async def validate_category_parent(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    category_id: uuid.UUID,
+    parent_id: uuid.UUID | None,
+    kind: str,
+) -> None:
+    """Reject an invalid parent link before it is written.
+
+    Rules: the parent must belong to this user, share the child's `kind` (a child
+    inherits its root's kind), and never form a cycle. Raises HTTPException(400)
+    on any violation; a valid or absent parent returns quietly.
+    """
+    if parent_id is None:
+        return
+    if parent_id == category_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A category cannot be its own parent")
+
+    parent = await get_owned_category(session, user_id, parent_id)
+    if parent is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown parent category for this user")
+    if parent.kind != kind:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "A subcategory must share its parent's kind"
+        )
+
+    # Walk up from the parent; reaching this category would close a cycle.
+    cursor: uuid.UUID | None = parent.parent_id
+    for _ in range(_MAX_CATEGORY_DEPTH):
+        if cursor is None:
+            return
+        if cursor == category_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Category parenting would form a cycle"
+            )
+        ancestor = await session.get(Category, cursor)
+        cursor = ancestor.parent_id if ancestor is not None else None
+    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Category nesting is too deep")
+
+
+def build_category_tree(categories: Sequence[Category]) -> list[CategoryTreeNode]:
+    """Assemble flat categories into a nested forest, ordered by kind/position.
+
+    Orphans (a `parent_id` pointing outside the given set) surface as roots so no
+    category is ever hidden from the tree.
+    """
+    nodes = {c.id: CategoryTreeNode.model_validate(c) for c in categories}
+    roots: list[CategoryTreeNode] = []
+    for category in categories:
+        node = nodes[category.id]
+        parent = nodes.get(category.parent_id) if category.parent_id else None
+        (parent.children if parent is not None else roots).append(node)
+
+    def _sort(items: list[CategoryTreeNode]) -> None:
+        items.sort(key=lambda n: (n.kind, n.position))
+        for item in items:
+            _sort(item.children)
+
+    _sort(roots)
+    return roots
 
 
 async def list_entries_for_year(

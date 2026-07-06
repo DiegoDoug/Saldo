@@ -50,6 +50,93 @@ async def test_category_crud(client: AsyncClient) -> None:
     assert len(with_deleted.json()) == 1
 
 
+async def test_category_nesting_color_icon(client: AsyncClient) -> None:
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+
+    root = await client.post(
+        "/budgeting/categories",
+        json={"name": "Casa", "kind": "fixed", "color": "#6EE7B7", "icon": "House"},
+        headers=h,
+    )
+    assert root.status_code == 201
+    root_body = root.json()
+    assert root_body["color"] == "#6EE7B7"
+    assert root_body["icon"] == "House"
+    assert root_body["parent_id"] is None
+    root_id = root_body["id"]
+
+    child = await client.post(
+        "/budgeting/categories",
+        json={"name": "Luz", "kind": "fixed", "parent_id": root_id},
+        headers=h,
+    )
+    assert child.status_code == 201
+    assert child.json()["parent_id"] == root_id
+
+    # Tree endpoint nests the child under its root.
+    tree = await client.get("/budgeting/categories/tree", headers=h)
+    assert tree.status_code == 200
+    forest = tree.json()
+    assert len(forest) == 1
+    assert forest[0]["id"] == root_id
+    assert [c["name"] for c in forest[0]["children"]] == ["Luz"]
+
+
+async def test_subcategory_rejects_cross_kind_parent(client: AsyncClient) -> None:
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+    fixed = await client.post(
+        "/budgeting/categories", json={"name": "Casa", "kind": "fixed"}, headers=h
+    )
+    fixed_id = fixed.json()["id"]
+    # A variable child under a fixed parent is rejected (kind must be inherited).
+    bad = await client.post(
+        "/budgeting/categories",
+        json={"name": "Ocio", "kind": "variable", "parent_id": fixed_id},
+        headers=h,
+    )
+    assert bad.status_code == 400
+
+
+async def test_category_parent_cycle_rejected(client: AsyncClient) -> None:
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+    a = await client.post(
+        "/budgeting/categories", json={"name": "A", "kind": "variable"}, headers=h
+    )
+    a_id = a.json()["id"]
+    b = await client.post(
+        "/budgeting/categories",
+        json={"name": "B", "kind": "variable", "parent_id": a_id},
+        headers=h,
+    )
+    b_id = b.json()["id"]
+    # Re-parenting A under its own descendant B would form a cycle.
+    looped = await client.patch(
+        f"/budgeting/categories/{a_id}", json={"parent_id": b_id}, headers=h
+    )
+    assert looped.status_code == 400
+    # A category cannot be its own parent either.
+    self_loop = await client.patch(
+        f"/budgeting/categories/{a_id}", json={"parent_id": a_id}, headers=h
+    )
+    assert self_loop.status_code == 400
+
+
+async def test_category_parent_must_be_owned(client: AsyncClient) -> None:
+    ana = await auth_headers(client, "ana@example.com", "ana-passphrase")
+    beto = await auth_headers(client, "beto@example.com", "beto-passphrase")
+    ana_cat = await client.post(
+        "/budgeting/categories", json={"name": "Casa", "kind": "fixed"}, headers=ana
+    )
+    ana_id = ana_cat.json()["id"]
+    # Beto cannot nest his category under Ana's.
+    resp = await client.post(
+        "/budgeting/categories",
+        json={"name": "Luz", "kind": "fixed", "parent_id": ana_id},
+        headers=beto,
+    )
+    assert resp.status_code == 400
+
+
 async def test_entry_crud(client: AsyncClient) -> None:
     h = await auth_headers(client, "ana@example.com", "passphrase-1")
     created = await client.post(

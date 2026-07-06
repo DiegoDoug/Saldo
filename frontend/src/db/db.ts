@@ -16,6 +16,9 @@ export interface LocalCategory {
   name: string;
   kind: "income" | "fixed" | "variable";
   position: number;
+  parentId: string | null; // null = a root category
+  color: string | null; // hex, e.g. #6EE7B7
+  icon: string | null; // lucide icon name
   updatedAt: string;
   deleted: 0 | 1;
 }
@@ -241,6 +244,22 @@ export class SaldoDB extends Dexie {
       liabilities: "id, kind, deleted, updatedAt",
       netWorthSnapshots: "id, date, deleted, updatedAt",
     });
+    // v8 adds category nesting (parentId index) plus color/icon. Existing rows
+    // predate these fields, so backfill them to null on upgrade.
+    this.version(8)
+      .stores({
+        categories: "id, kind, parentId, deleted, updatedAt",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<LocalCategory>("categories")
+          .toCollection()
+          .modify((c) => {
+            c.parentId ??= null;
+            c.color ??= null;
+            c.icon ??= null;
+          });
+      });
   }
 }
 

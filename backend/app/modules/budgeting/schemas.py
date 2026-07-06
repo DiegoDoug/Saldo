@@ -20,12 +20,18 @@ class CategoryCreate(BaseModel):
     name: str
     kind: CategoryKind
     position: int = 0
+    parent_id: uuid.UUID | None = None
+    color: str | None = None
+    icon: str | None = None
 
 
 class CategoryUpdate(BaseModel):
     name: str | None = None
     kind: CategoryKind | None = None
     position: int | None = None
+    parent_id: uuid.UUID | None = None
+    color: str | None = None
+    icon: str | None = None
 
 
 class CategoryRead(BaseModel):
@@ -35,9 +41,18 @@ class CategoryRead(BaseModel):
     name: str
     kind: str
     position: int
+    parent_id: uuid.UUID | None = None
+    color: str | None = None
+    icon: str | None = None
     created_at: datetime
     updated_at: datetime
     deleted: bool
+
+
+class CategoryTreeNode(CategoryRead):
+    """A category plus its (recursively nested) subcategories."""
+
+    children: list["CategoryTreeNode"] = []
 
 
 # --- Entry --------------------------------------------------------------
