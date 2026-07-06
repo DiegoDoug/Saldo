@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AccountsPage } from "./modules/accounts/AccountsPage";
 import { BillsPage } from "./modules/bills/BillsPage";
 import { BudgetingLayout } from "./modules/budgeting/BudgetingLayout";
+import { CategoryManager } from "./modules/budgeting/CategoryManager";
 import { MonthView } from "./modules/budgeting/MonthView";
 import { YearView } from "./modules/budgeting/YearView";
 import { DashboardPage } from "./modules/dashboard/DashboardPage";
@@ -11,6 +12,7 @@ import { MerchantsPage } from "./modules/merchants/MerchantsPage";
 import { ForecastPage } from "./modules/forecast/ForecastPage";
 import { NetWorthPage } from "./modules/networth/NetWorthPage";
 import { ReportsPage } from "./modules/reports/ReportsPage";
+import { TagsPage } from "./modules/tags/TagsPage";
 import { TransactionsPage } from "./modules/transactions/TransactionsPage";
 import { LoginPage } from "./modules/identity/LoginPage";
 import { RegisterPage } from "./modules/identity/RegisterPage";
@@ -35,6 +37,8 @@ export function App() {
       >
         <Route path="/" element={<DashboardPage />} />
         <Route path="/month/:month" element={<MonthView />} />
+        <Route path="/categories" element={<CategoryManager />} />
+        <Route path="/tags" element={<TagsPage />} />
         <Route path="/year" element={<YearView />} />
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />

@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { computeMonth, computeYear, makeMonthInput } from "./budgeting";
+import { computeBudgetVariance, computeMonth, computeYear, makeMonthInput } from "./budgeting";
 
 describe("computeMonth", () => {
   it("seed month from the sheet (nomina 1500, otros 50, goal 200)", () => {
@@ -110,5 +110,46 @@ describe("computeYear", () => {
     expect(y.variableTotal).toBe(300);
     expect(y.savingsTotal).toBe(500 + 1650);
     expect(y.otrosTotal).toBe(0 + 150);
+  });
+});
+
+// These mirror test_budget_variance_* in the Python core with the SAME numbers.
+describe("computeBudgetVariance", () => {
+  it("computes per-category variance and totals", () => {
+    const v = computeBudgetVariance(
+      { a: 100, b: 200, c: 50 },
+      { a: 120, b: 150, d: 30 },
+    );
+    expect(v.byCategory.a.remaining).toBe(-20);
+    expect(v.byCategory.a.over).toBe(true);
+    expect(v.byCategory.b.remaining).toBe(50);
+    expect(v.byCategory.b.over).toBe(false);
+    // Budgeted-but-unspent shows up with actual 0.
+    expect(v.byCategory.c.actual).toBe(0);
+    expect(v.byCategory.c.remaining).toBe(50);
+    // Spent-without-budget shows up with budgeted 0 and over=true.
+    expect(v.byCategory.d.budgeted).toBe(0);
+    expect(v.byCategory.d.over).toBe(true);
+    expect(v.budgetedTotal).toBe(350);
+    expect(v.actualTotal).toBe(300);
+    expect(v.remainingTotal).toBe(50);
+  });
+
+  it("rounds to the cent, matching the Python core", () => {
+    const v = computeBudgetVariance({ x: 0.1 }, { x: 0.2 });
+    expect(v.byCategory.x.budgeted).toBe(0.1);
+    expect(v.byCategory.x.actual).toBe(0.2);
+    expect(v.byCategory.x.remaining).toBe(-0.1);
+    expect(v.remainingTotal).toBe(-0.1);
+    // Half rounds up: 0.125 -> 0.13.
+    expect(computeBudgetVariance({ x: 0.125 }, {}).byCategory.x.budgeted).toBe(0.13);
+  });
+
+  it("handles empty inputs", () => {
+    const v = computeBudgetVariance({}, {});
+    expect(v.byCategory).toEqual({});
+    expect(v.budgetedTotal).toBe(0);
+    expect(v.actualTotal).toBe(0);
+    expect(v.remainingTotal).toBe(0);
   });
 });

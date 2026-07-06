@@ -55,6 +55,42 @@ async def test_offline_queue_replay_is_idempotent(client: AsyncClient) -> None:
     assert listed_again.json()[0]["amount"] == 1500
 
 
+async def test_category_nesting_fields_round_trip_through_sync(client: AsyncClient) -> None:
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+    root_id, child_id = str(uuid.uuid4()), str(uuid.uuid4())
+    resp = await client.post(
+        "/sync/push",
+        json={
+            "categories": [
+                {
+                    "id": root_id,
+                    "name": "Casa",
+                    "kind": "fixed",
+                    "color": "#6EE7B7",
+                    "icon": "House",
+                    "updated_at": "2026-01-01T10:00:00",
+                    "deleted": False,
+                },
+                {
+                    "id": child_id,
+                    "name": "Luz",
+                    "kind": "fixed",
+                    "parent_id": root_id,
+                    "updated_at": "2026-01-01T10:00:00",
+                    "deleted": False,
+                },
+            ]
+        },
+        headers=h,
+    )
+    assert resp.status_code == 200
+    pulled = await client.get("/sync/pull", headers=h)
+    by_id = {c["id"]: c for c in pulled.json()["categories"]}
+    assert by_id[root_id]["color"] == "#6EE7B7"
+    assert by_id[root_id]["icon"] == "House"
+    assert by_id[child_id]["parent_id"] == root_id
+
+
 async def test_last_write_wins_by_updated_at(client: AsyncClient) -> None:
     h = await auth_headers(client, "ana@example.com", "passphrase-1")
     eid = str(uuid.uuid4())

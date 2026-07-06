@@ -15,6 +15,8 @@ export interface WireTransaction {
   merchant_id: string | null;
   recurring_id: string | null;
   category_id: string | null;
+  split_parent: boolean;
+  parent_id: string | null;
   date: string;
   notes: string;
   tags: string[];
@@ -33,6 +35,8 @@ export function wireToLocalTransaction(w: WireTransaction): LocalTransaction {
     merchantId: w.merchant_id,
     recurringId: w.recurring_id,
     categoryId: w.category_id,
+    splitParent: w.split_parent ? 1 : 0,
+    parentId: w.parent_id ?? null,
     date: w.date,
     notes: w.notes,
     tags: w.tags ?? [],
@@ -52,6 +56,8 @@ export function localTransactionToSync(t: LocalTransaction) {
     merchant_id: t.merchantId,
     recurring_id: t.recurringId,
     category_id: t.categoryId,
+    split_parent: t.splitParent === 1,
+    parent_id: t.parentId,
     date: t.date,
     notes: t.notes,
     tags: t.tags,

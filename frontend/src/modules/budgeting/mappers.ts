@@ -13,6 +13,9 @@ export interface WireCategory {
   name: string;
   kind: "income" | "fixed" | "variable";
   position: number;
+  parent_id: string | null;
+  color: string | null;
+  icon: string | null;
   updated_at: string;
   deleted: boolean;
 }
@@ -37,6 +40,9 @@ export function wireToLocalCategory(w: WireCategory): LocalCategory {
     name: w.name,
     kind: w.kind,
     position: w.position,
+    parentId: w.parent_id ?? null,
+    color: w.color ?? null,
+    icon: w.icon ?? null,
     updatedAt: w.updated_at,
     deleted: w.deleted ? 1 : 0,
   };
@@ -64,6 +70,9 @@ export function localCategoryToSync(c: LocalCategory) {
     name: c.name,
     kind: c.kind,
     position: c.position,
+    parent_id: c.parentId,
+    color: c.color,
+    icon: c.icon,
     updated_at: c.updatedAt,
     deleted: c.deleted === 1,
   };

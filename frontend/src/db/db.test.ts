@@ -18,6 +18,7 @@ describe("Dexie schema", () => {
       "netWorthSnapshots",
       "profile",
       "recurringRules",
+      "tags",
       "transactions",
     ]);
   });

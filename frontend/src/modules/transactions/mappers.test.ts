@@ -12,6 +12,8 @@ const wire: WireTransaction = {
   merchant_id: null,
   recurring_id: null,
   category_id: "c1",
+  split_parent: false,
+  parent_id: null,
   date: "2026-01-15",
   notes: "Coffee",
   tags: ["food"],

@@ -16,6 +16,9 @@ export interface LocalCategory {
   name: string;
   kind: "income" | "fixed" | "variable";
   position: number;
+  parentId: string | null; // null = a root category
+  color: string | null; // hex, e.g. #6EE7B7
+  icon: string | null; // lucide icon name
   updatedAt: string;
   deleted: 0 | 1;
 }
@@ -67,6 +70,8 @@ export interface LocalTransaction {
   merchantId: string | null;
   recurringId: string | null;
   categoryId: string | null;
+  splitParent: 0 | 1; // 1 = a split container, excluded from money sums
+  parentId: string | null; // set on a split child, points at its parent
   date: string; // ISO date (YYYY-MM-DD)
   notes: string;
   tags: string[];
@@ -161,6 +166,19 @@ export interface LocalMerchant {
   deleted: 0 | 1;
 }
 
+/**
+ * A tag registry row: gives a tag name a stable colour and manageable identity.
+ * A transaction's membership stays in its `tags: string[]` (by name); this table
+ * is the palette/registry behind those names.
+ */
+export interface LocalTag {
+  id: string;
+  name: string;
+  color: string;
+  updatedAt: string;
+  deleted: 0 | 1;
+}
+
 /** Mirror of the authenticated User (one row: the current profile). */
 export interface LocalProfile {
   id: string;
@@ -204,6 +222,7 @@ export class SaldoDB extends Dexie {
   assets!: Table<LocalAsset, string>;
   liabilities!: Table<LocalLiability, string>;
   netWorthSnapshots!: Table<LocalNetWorthSnapshot, string>;
+  tags!: Table<LocalTag, string>;
 
   constructor() {
     super("saldo");
@@ -240,6 +259,42 @@ export class SaldoDB extends Dexie {
       assets: "id, kind, deleted, updatedAt",
       liabilities: "id, kind, deleted, updatedAt",
       netWorthSnapshots: "id, date, deleted, updatedAt",
+    });
+    // v8 adds category nesting (parentId index) plus color/icon. Existing rows
+    // predate these fields, so backfill them to null on upgrade.
+    this.version(8)
+      .stores({
+        categories: "id, kind, parentId, deleted, updatedAt",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<LocalCategory>("categories")
+          .toCollection()
+          .modify((c) => {
+            c.parentId ??= null;
+            c.color ??= null;
+            c.icon ??= null;
+          });
+      });
+    // v9 adds transaction splits (splitParent/parentId indexes). Existing rows
+    // are non-splits, so backfill splitParent=0 / parentId=null on upgrade.
+    this.version(9)
+      .stores({
+        transactions:
+          "id, accountId, transferAccountId, type, categoryId, merchantId, date, deleted, updatedAt, splitParent, parentId",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<LocalTransaction>("transactions")
+          .toCollection()
+          .modify((t) => {
+            t.splitParent ??= 0;
+            t.parentId ??= null;
+          });
+      });
+    // v10 adds the tag registry (name + colour), additive.
+    this.version(10).stores({
+      tags: "id, name, deleted, updatedAt",
     });
   }
 }

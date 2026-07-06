@@ -18,6 +18,8 @@ import {
   Receipt,
   Scale,
   Store,
+  Tag as TagIcon,
+  Tags,
   Target,
   Wallet,
 } from "lucide-react";
@@ -46,6 +48,8 @@ const NAV: NavEntry[] = [
     items: [
       { to: "/transactions", label: "Movimientos", icon: Receipt },
       { to: "/accounts", label: "Cuentas", icon: Landmark },
+      { to: "/categories", label: "Categorías", icon: Tags },
+      { to: "/tags", label: "Etiquetas", icon: TagIcon },
       { to: "/bills", label: "Recibos", icon: CalendarClock },
       { to: "/merchants", label: "Comercios", icon: Store },
     ],

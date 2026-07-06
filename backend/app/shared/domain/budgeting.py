@@ -17,7 +17,7 @@ at the boundary via the Money value object (see money.py); mixing currencies is
 resolved to one currency *before* it reaches these functions.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from app.shared.domain.rounding import round2
@@ -94,6 +94,55 @@ def compute_month(m: MonthInput) -> MonthResult:
         # The `income > 0` guard means a zero-income month is never "overspent",
         # even if it has expenses — matching the prototype.
         overspend=expenses_total > can_spend and income_total > 0,
+    )
+
+
+@dataclass(frozen=True)
+class CategoryVariance:
+    budgeted: float
+    actual: float
+    remaining: float  # budgeted - actual (negative once actual overruns budget)
+    over: bool  # actual strictly exceeds budget
+
+
+@dataclass(frozen=True)
+class BudgetVariance:
+    by_category: dict[str, CategoryVariance]
+    budgeted_total: float
+    actual_total: float
+    remaining_total: float
+
+
+def compute_budget_variance(
+    budgets_by_category: Mapping[str, float],
+    actuals_by_category: Mapping[str, float],
+) -> BudgetVariance:
+    """Compare planned amounts (budgets) against realized amounts (actuals).
+
+    Pure and identity-agnostic: both inputs are plain {category-key: amount}
+    maps within a single currency. Every category appearing in *either* map gets
+    a row, so a budget with no spending (and spending with no budget) both show
+    up. Keys are processed in sorted order for a deterministic result that the
+    TypeScript mirror reproduces exactly.
+    """
+    keys = sorted(set(budgets_by_category) | set(actuals_by_category))
+    by_category: dict[str, CategoryVariance] = {}
+    for key in keys:
+        budgeted = round2(budgets_by_category.get(key, 0.0))
+        actual = round2(actuals_by_category.get(key, 0.0))
+        by_category[key] = CategoryVariance(
+            budgeted=budgeted,
+            actual=actual,
+            remaining=round2(budgeted - actual),
+            over=actual > budgeted,
+        )
+    budgeted_total = round2(sum(v.budgeted for v in by_category.values()))
+    actual_total = round2(sum(v.actual for v in by_category.values()))
+    return BudgetVariance(
+        by_category=by_category,
+        budgeted_total=budgeted_total,
+        actual_total=actual_total,
+        remaining_total=round2(budgeted_total - actual_total),
     )
 
 

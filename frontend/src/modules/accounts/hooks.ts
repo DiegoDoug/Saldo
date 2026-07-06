@@ -28,6 +28,8 @@ export function accountDeltas(transactions: LocalTransaction[]): Map<string, num
   const add = (id: string, amount: number) => deltas.set(id, (deltas.get(id) ?? 0) + amount);
   for (const t of transactions) {
     if (t.deleted === 1) continue;
+    // Split parents are containers; their children carry the real movement.
+    if (t.splitParent === 1) continue;
     if (t.type === "income") add(t.accountId, t.amount);
     else if (t.type === "expense") add(t.accountId, -t.amount);
     else if (t.type === "transfer") {

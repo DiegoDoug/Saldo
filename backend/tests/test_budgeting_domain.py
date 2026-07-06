@@ -11,6 +11,7 @@ both sides with the same expected values.
 
 from app.shared.domain.budgeting import (
     MonthInput,
+    compute_budget_variance,
     compute_month,
     compute_year,
 )
@@ -109,6 +110,43 @@ def test_compute_year_aggregates_twelve_months() -> None:
     assert y.nomina_total == 12 * 1500
     # otros_total folds in extras too (prototype behaviour).
     assert y.otros_total == 12 * 50
+
+
+# ----------------------------------------------------------------------
+# Budget-vs-actual variance (mirrored in budgeting.test.ts with the SAME numbers)
+# ----------------------------------------------------------------------
+def test_budget_variance_per_category_and_totals() -> None:
+    v = compute_budget_variance(
+        {"a": 100, "b": 200, "c": 50},
+        {"a": 120, "b": 150, "d": 30},
+    )
+    assert v.by_category["a"].remaining == -20 and v.by_category["a"].over is True
+    assert v.by_category["b"].remaining == 50 and v.by_category["b"].over is False
+    # Budgeted-but-unspent shows up with actual 0.
+    assert v.by_category["c"].actual == 0 and v.by_category["c"].remaining == 50
+    # Spent-without-budget shows up with budgeted 0 and over=True.
+    assert v.by_category["d"].budgeted == 0 and v.by_category["d"].over is True
+    assert v.budgeted_total == 350
+    assert v.actual_total == 300
+    assert v.remaining_total == 50
+
+
+def test_budget_variance_rounding_parity() -> None:
+    v = compute_budget_variance({"x": 0.1}, {"x": 0.2})
+    assert v.by_category["x"].budgeted == 0.1
+    assert v.by_category["x"].actual == 0.2
+    assert v.by_category["x"].remaining == -0.1
+    assert v.remaining_total == -0.1
+    # Half rounds up (round2), matching the frontend: 0.125 -> 0.13.
+    assert compute_budget_variance({"x": 0.125}, {}).by_category["x"].budgeted == 0.13
+
+
+def test_budget_variance_empty() -> None:
+    v = compute_budget_variance({}, {})
+    assert v.by_category == {}
+    assert v.budgeted_total == 0
+    assert v.actual_total == 0
+    assert v.remaining_total == 0
 
 
 def test_compute_year_mixed_months() -> None:

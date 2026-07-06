@@ -11,11 +11,13 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 
+from fastapi import HTTPException, status
 from sqlalchemy import Select, String, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.modules.transactions.models import Transaction
+from app.shared.domain.rounding import round2
 
 
 async def get_owned_transaction(
@@ -25,6 +27,54 @@ async def get_owned_transaction(
     if tx is None or tx.user_id != user_id:
         return None
     return tx
+
+
+def build_split_rows(user_id: uuid.UUID, payload) -> tuple[Transaction, list[Transaction]]:
+    """Build a split's parent + child rows, enforcing the sum invariant.
+
+    The parent is a `split_parent` container (no category, excluded from sums);
+    each child is a leaf carrying the parent's account/type/date/currency plus its
+    own category and amount. Raises 400 if the children don't sum to the total or
+    the split has no children.
+    """
+    if not payload.children:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A split needs at least one line item")
+    child_total = round2(sum(c.amount for c in payload.children))
+    if child_total != round2(payload.amount):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Split line items must sum to the total amount"
+        )
+
+    parent = Transaction(
+        id=payload.id or uuid.uuid4(),
+        user_id=user_id,
+        type=payload.type,
+        amount=payload.amount,
+        currency=payload.currency.upper(),
+        account_id=payload.account_id,
+        merchant_id=payload.merchant_id,
+        category_id=None,
+        split_parent=True,
+        date=payload.date,
+        notes=payload.notes,
+        tags=payload.tags,
+    )
+    children = [
+        Transaction(
+            id=child.id or uuid.uuid4(),
+            user_id=user_id,
+            type=payload.type,
+            amount=child.amount,
+            currency=payload.currency.upper(),
+            account_id=payload.account_id,
+            category_id=child.category_id,
+            parent_id=parent.id,
+            date=payload.date,
+            notes=child.notes,
+        )
+        for child in payload.children
+    ]
+    return parent, children
 
 
 async def account_deltas(
@@ -38,6 +88,8 @@ async def account_deltas(
     stmt = select(Transaction).where(
         Transaction.user_id == user_id,
         Transaction.deleted == False,  # noqa: E712
+        # Split parents are containers; their children carry the real movement.
+        Transaction.split_parent == False,  # noqa: E712
     )
     deltas: dict[uuid.UUID, float] = {}
     for tx in (await session.execute(stmt)).scalars().all():

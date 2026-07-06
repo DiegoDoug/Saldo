@@ -20,6 +20,7 @@ import { useAuthStore } from "../identity/authStore";
 import { formatMoney } from "../../shared/format";
 import { C, CATEGORY_COLORS, MONTHS } from "../../shared/theme";
 import { MoneyInput } from "../../shared/ui/MoneyInput";
+import { BudgetVsActual } from "./BudgetVsActual";
 import { CategoryRow } from "./CategoryRow";
 import { amountByCategory, useCategories, useMonthResult } from "./hooks";
 import { addCategory, setGoal } from "./localRepo";
@@ -46,7 +47,8 @@ export function MonthView() {
       key: c.id,
       label: c.name,
       value: amounts.get(c.id) ?? 0,
-      color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
+      // Prefer the category's own colour; fall back to the rotating palette.
+      color: c.color ?? CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
     }))
     .filter((d) => d.value > 0);
 
@@ -214,6 +216,9 @@ export function MonthView() {
           onClick={() => void addCategory("Nuevo gasto", "variable")}
         />
       </Section>
+
+      {/* Budget vs actual (uses the month's transactions as actuals) */}
+      <BudgetVsActual year={year} month={monthIdx} currency={currency} />
 
       {/* Breakdown */}
       {breakdown.length > 0 && (

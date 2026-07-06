@@ -37,6 +37,7 @@ from app.modules.sync.schemas import (
     RecurringRuleSync,
     TransactionSync,
 )
+from app.modules.tags.models import Tag
 from app.modules.transactions.models import Transaction
 
 router = APIRouter(prefix="/sync", tags=["sync"])
@@ -97,6 +98,7 @@ async def _upsert_account(
     return existing
 
 
+_TAG_FIELDS = ("name", "color", "deleted")
 _ASSET_FIELDS = ("name", "kind", "value", "currency", "deleted")
 _LIABILITY_FIELDS = ("name", "kind", "balance", "currency", "interest_rate", "deleted")
 _SNAPSHOT_FIELDS = (
@@ -273,6 +275,8 @@ _TX_FIELDS = (
     "merchant_id",
     "recurring_id",
     "category_id",
+    "split_parent",
+    "parent_id",
     "date",
     "notes",
     "tags",
@@ -322,6 +326,9 @@ async def _upsert_category(
             name=incoming.name,
             kind=incoming.kind,
             position=incoming.position,
+            parent_id=incoming.parent_id,
+            color=incoming.color,
+            icon=incoming.icon,
             created_at=inc_ts,
             updated_at=inc_ts,
             deleted=incoming.deleted,
@@ -334,6 +341,9 @@ async def _upsert_category(
         existing.name = incoming.name
         existing.kind = incoming.kind
         existing.position = incoming.position
+        existing.parent_id = incoming.parent_id
+        existing.color = incoming.color
+        existing.icon = incoming.icon
         existing.deleted = incoming.deleted
         existing.updated_at = inc_ts
         session.add(existing)
@@ -400,10 +410,14 @@ async def push(payload: PushRequest, user: CurrentUser, session: Session):
     transactions = [await _upsert_transaction(session, user.id, t) for t in payload.transactions]
     categories = [await _upsert_category(session, user.id, c) for c in payload.categories]
     entries = [await _upsert_entry(session, user.id, e) for e in payload.entries]
+    tags = [
+        await _upsert_generic(session, user.id, t, Tag, _TAG_FIELDS, uppercase_currency=False)
+        for t in payload.tags
+    ]
     await session.commit()
     for record in (
         *accounts, *merchants, *rules, *goals, *assets, *liabilities, *snapshots,
-        *transactions, *categories, *entries,
+        *transactions, *categories, *entries, *tags,
     ):
         await session.refresh(record)
     return PushResponse(
@@ -417,6 +431,7 @@ async def push(payload: PushRequest, user: CurrentUser, session: Session):
         snapshots=snapshots,
         categories=categories,
         entries=entries,
+        tags=tags,
         server_time=utcnow(),
     )
 
@@ -433,6 +448,7 @@ async def pull(user: CurrentUser, session: Session, since: datetime | None = Non
     tx_stmt = select(Transaction).where(Transaction.user_id == user.id)
     cat_stmt = select(Category).where(Category.user_id == user.id)
     entry_stmt = select(Entry).where(Entry.user_id == user.id)
+    tag_stmt = select(Tag).where(Tag.user_id == user.id)
     if since is not None:
         cutoff = _to_naive_utc(since)
         acc_stmt = acc_stmt.where(Account.updated_at > cutoff)
@@ -445,6 +461,7 @@ async def pull(user: CurrentUser, session: Session, since: datetime | None = Non
         tx_stmt = tx_stmt.where(Transaction.updated_at > cutoff)
         cat_stmt = cat_stmt.where(Category.updated_at > cutoff)
         entry_stmt = entry_stmt.where(Entry.updated_at > cutoff)
+        tag_stmt = tag_stmt.where(Tag.updated_at > cutoff)
 
     # Tombstones (deleted=True) are intentionally included so the client can
     # remove locally-deleted records it hasn't yet seen the deletion for.
@@ -458,6 +475,7 @@ async def pull(user: CurrentUser, session: Session, since: datetime | None = Non
     transactions = list((await session.execute(tx_stmt)).scalars().all())
     categories = list((await session.execute(cat_stmt)).scalars().all())
     entries = list((await session.execute(entry_stmt)).scalars().all())
+    tags = list((await session.execute(tag_stmt)).scalars().all())
     return PullResponse(
         accounts=accounts,
         transactions=transactions,
@@ -469,5 +487,6 @@ async def pull(user: CurrentUser, session: Session, since: datetime | None = Non
         snapshots=snapshots,
         categories=categories,
         entries=entries,
+        tags=tags,
         server_time=utcnow(),
     )

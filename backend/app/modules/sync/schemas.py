@@ -18,6 +18,7 @@ from app.modules.budgeting.schemas import CategoryRead, EntryRead
 from app.modules.goals.schemas import GoalRead
 from app.modules.merchants.schemas import MerchantRead
 from app.modules.networth.schemas import AssetRead, LiabilityRead, SnapshotRead
+from app.modules.tags.schemas import TagRead
 from app.modules.transactions.schemas import TransactionRead
 
 
@@ -100,6 +101,14 @@ class MerchantSync(BaseModel):
     deleted: bool = False
 
 
+class TagSync(BaseModel):
+    id: uuid.UUID
+    name: str
+    color: str = ""
+    updated_at: datetime
+    deleted: bool = False
+
+
 class AccountSync(BaseModel):
     id: uuid.UUID
     name: str
@@ -126,6 +135,8 @@ class TransactionSync(BaseModel):
     merchant_id: uuid.UUID | None = None
     recurring_id: uuid.UUID | None = None
     category_id: uuid.UUID | None = None
+    split_parent: bool = False
+    parent_id: uuid.UUID | None = None
     date: date_type
     notes: str = ""
     tags: list[str] = []
@@ -138,6 +149,9 @@ class CategorySync(BaseModel):
     name: str
     kind: Literal["income", "fixed", "variable"]
     position: int = 0
+    parent_id: uuid.UUID | None = None
+    color: str | None = None
+    icon: str | None = None
     updated_at: datetime
     deleted: bool = False
 
@@ -166,6 +180,7 @@ class PushRequest(BaseModel):
     snapshots: list[SnapshotSync] = []
     categories: list[CategorySync] = []
     entries: list[EntrySync] = []
+    tags: list[TagSync] = []
 
 
 class PushResponse(BaseModel):
@@ -181,6 +196,7 @@ class PushResponse(BaseModel):
     snapshots: list[SnapshotRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
+    tags: list[TagRead] = []
     server_time: datetime
 
 
@@ -195,4 +211,5 @@ class PullResponse(BaseModel):
     snapshots: list[SnapshotRead] = []
     categories: list[CategoryRead]
     entries: list[EntryRead]
+    tags: list[TagRead] = []
     server_time: datetime

@@ -10,6 +10,195 @@ A running changelog of the staged build. Each entry records **what was built**,
 
 ---
 
+## Stage 17 — Category reorder & polish
+
+**Built**
+- **Drag-to-reorder** categories in the manager (dnd-kit, already in stack): each
+  sibling group (roots per kind, children per parent) is its own sortable list
+  with a grip handle; dropping persists `position` via a new `reorderCategories`
+  (one Dexie `rw` transaction, `updatedAt` bumped so it syncs).
+- **Month-view donut** now keys each slice on the category's own colour, falling
+  back to the rotating palette — so the breakdown, the budget-vs-actual bars, and
+  the category chips all read as one colour system.
+
+**Verification**
+- `tsc` clean; `vitest` 103 passing; `vite build` succeeds. Verified in the running
+  app: grip handles present on every category row, nesting preserved.
+
+---
+
+## Stage 16 — Tags (registry, colours, chips & manager)
+
+**Built**
+- **Tag registry** (`Tag`: name + colour + sync envelope) as a new `tags` backend
+  module — CRUD API, user-scoped, soft-deleted. A transaction's *membership* stays
+  in its existing `tags: string[]` JSON (which already syncs); this table is the
+  palette/identity behind those names, so no parallel membership store and no
+  churn to the transactions table. Alembic migration `d3e4f5a6b7c8`; zero drift.
+- **Sync**: `TagSync` round-trips through the generalized `_upsert_generic`
+  (backend) and a `mergeTags` (frontend) with LWW/tombstones; Dexie **v10** adds
+  the `tags` store.
+- **UI**: the transaction form gets a create-on-type tag multi-select (`TagInput`);
+  the ledger shows colored tag chips and clickable **tag filter chips**; a new
+  **tag manager** (`/tags`) lets you recolour, rename (rewrites the name across
+  every transaction that carries it, in one transaction), and delete. Chip colours
+  come from the registry with a deterministic name-hash fallback, so a tag is never
+  grey and never flickers.
+
+**Verification**
+- Backend `pytest` green (tag CRUD, sync round-trip, cross-user isolation); `ruff`
+  clean. Frontend `tsc` clean; `vitest` green (mapper round-trip + colour helper).
+- Verified in the running app: created a tagged transaction (existing + brand-new
+  tag), saw colored chips + filter chips, and recoloured a tag in the manager.
+
+---
+
+## Stage 15 — Category-manager, split-editor & variance UI
+
+**Built**
+- **Category manager** (`/categories`, new nav entry under *Dinero*): a per-kind
+  tree with expand/collapse, inline rename, add root/subcategory (subcategory
+  inherits its parent's kind), delete (cascades the subtree), and an inline
+  colour + lucide-icon picker. Curated icon set in `categoryIcons.ts` so a stored
+  icon name is a safe lookup, never a dynamic import.
+- **Split editor** in the transaction form: a *"Dividir en categorías"* toggle
+  swaps the single category select for a line editor (category + amount rows,
+  add/remove line) with a live *Suma / Faltan* balance readout; Guardar is
+  disabled until the lines sum to the total. Submits through `addSplit`. The
+  ledger now shows a split once — as its parent row with a *Dividido* badge —
+  and hides the child leaves; deleting a split removes the whole subtree.
+- **Budget-vs-actual visualization** (`BudgetVsActual`, rendered in the month
+  view): per-category progress bars (actual vs budget) coloured by the category's
+  colour, over-budget in coral, with a header showing the month's remaining/over
+  total. Driven by the pure `useMonthVariance` hook.
+
+**Verification**
+- `tsc` clean; `vitest` 100 passing; production `vite build` succeeds.
+- **Verified in the running app** (backend + Vite + headless Chromium): logged in
+  against a seeded demo user and captured all three screens rendering correctly —
+  nested categories with colour/icon pickers, budget-vs-actual bars (Súper over
+  at 280/200 counting a split child, Ocio under at 70/80), and the split editor
+  with live sum validation. No runtime/console JS errors.
+
+**Open**
+- Drag-to-reorder in the category manager and a recurring-rules manager remain
+  from the plan's Stage 16/17 wishlist; the current bills module already covers
+  recurring templates.
+
+---
+
+## Stage 14 — Split transactions
+
+**Built**
+- `Transaction` gains `split_parent` (a container flag) and a self-referential
+  `parent_id`. A split is one parent row carrying the total (plus account/type/
+  date/note) and N child leaf rows, each with its own category and amount. This
+  reuses the entire transaction machinery — sync, tags, filters — with one table.
+- **One rule keeps the money honest:** every sum excludes `split_parent` rows and
+  counts the children. Applied to `account_deltas` (balances) and the variance
+  actuals query on both server and client, so a split never double-counts.
+- Alembic migration `c2d3e4f5a6b7` (batch mode for the self-FK; `split_parent`
+  backfilled to false via a dropped `server_default`). Verified upgrade + zero
+  autogenerate drift.
+- API: `POST /transactions/split` validates the sum invariant
+  (`Σ children == total`), that the split has ≥1 line, and that every referenced
+  account/merchant/category is owned, then writes parent + children atomically.
+- Sync: `TransactionSync` + the table-driven `_TX_FIELDS` carry the new columns.
+- Frontend: `LocalTransaction` extended; **Dexie v9** indexes `splitParent`/
+  `parentId` and backfills existing rows; mappers updated; `addSplit`/`deleteSplit`
+  in `localRepo` write the whole split in a single `rw` transaction guarded by a
+  pure, tested `splitChildrenSumTo` invariant; `accountDeltas` and the variance
+  hook skip split parents.
+
+**Verification**
+- Backend `pytest` green — split create, sum-mismatch rejection, foreign-category
+  rejection, and an end-to-end check that balance (−100 once) and variance (60 +
+  40 across two categories) count leaves not the parent. `ruff` clean.
+- Frontend `tsc` clean; `vitest` green — `splitChildrenSumTo` cases and an
+  `accountDeltas` split-exclusion case.
+
+**Open**
+- The split-editor UI and split-aware ledger grouping (a split currently syncs and
+  balances correctly, but the flat ledger list still shows parent and children as
+  separate rows) — deferred to the UI slice (plan Stage 16), along with the
+  category-manager and budget-vs-actual visualizations.
+
+---
+
+## Stage 13 — Budget-vs-actual variance
+
+**Built**
+- New pure domain function `compute_budget_variance(budgets, actuals)` in **both**
+  cores (`app/shared/domain/budgeting.py` and `shared/domain/budgeting.ts`),
+  returning per-category `{budgeted, actual, remaining, over}` plus totals. Keys
+  are processed in sorted order so the two languages agree to the cent; the
+  expected-value test tables are mirrored case-for-case (the cross-language
+  contract). Framework-free and identity-agnostic — it takes plain
+  `{category-key: amount}` maps, nothing about entries or transactions leaks in.
+- Backend endpoint `GET /budgeting/variance/{year}/{month}`: budgets come from the
+  month's categorized `Entry` amounts, actuals from that month's categorized
+  `Transaction` rows (transfers and goal entries excluded). All queries are
+  `user_id`-scoped; a `month_budget_actuals` service helper keeps the handler thin.
+- Frontend offline-first hook `useMonthVariance(year, month)` derives the same
+  view from local Dexie data (entries as budget, month's transactions as actuals)
+  via a pure, unit-tested `computeMonthVariance`.
+
+**Verification**
+- Backend `pytest` green (variance domain parity + endpoint compare + cross-user
+  scoping tests); `ruff` clean.
+- Frontend `tsc` clean; `vitest` green (mirrored variance parity table + the
+  `computeMonthVariance` filtering tests).
+
+**Open**
+- Split transactions (next slice) and the UI that renders variance as
+  budget-vs-actual progress bars per category (plan Stages 14–16).
+
+---
+
+## Stage 12 — Category nesting, color & icon
+
+**Context**
+- Implements the first slice of `docs/plans/financial_feature_imp_plan.md`,
+  **adapted** to the current codebase. The plan pre-dates the finance-platform
+  work (accounts, a full `transactions` ledger, merchants, bills, goals, net
+  worth, reports, forecast), so its central move — "add a `Transaction` table" —
+  is already satisfied differently. Rather than duplicate that, we build the
+  plan's still-missing, non-conflicting pieces onto the existing architecture.
+  Category nesting/color/icon is the cleanest such piece and lands first.
+
+**Built**
+- `Category` gains three additive columns: a self-referential `parent_id`
+  (nesting), plus optional `color` (hex) and `icon` (lucide name). A child
+  **inherits its root's `kind`**, so a whole tree shares one kind.
+- Alembic migration `b1c2d3e4f5a6` (batch mode — SQLite recreates the table for
+  the self-FK). Verified `alembic upgrade head` on a fresh DB and confirmed
+  **zero autogenerate drift** against the model.
+- API: `create/update` accept the new fields and validate the parent link
+  (owned-by-user, kind match, no cycles, self-parent rejected, depth-capped) via
+  a `validate_category_parent` service helper. New `GET /budgeting/categories/tree`
+  returns the nested forest (orphans surface as roots) through a
+  `CategoryTreeNode` schema. Handlers stay under 30 lines.
+- Sync: `CategorySync` + `_upsert_category` round-trip `parent_id/color/icon`
+  (LWW/tombstones unchanged).
+- Frontend data layer: `LocalCategory` extended; **Dexie v8** adds a `parentId`
+  index and backfills existing rows to `null` on upgrade; mappers, `localRepo`
+  (`addSubcategory`, `setCategoryColor/Icon`, subtree-cascading delete), and a
+  `useCategoryTree` hook + `buildCategoryForest`.
+
+**Verification**
+- Backend `pytest` green; new tests cover the tree, cross-kind rejection, cycle
+  and self-parent rejection, cross-user parent ownership, and a sync round-trip
+  of the new fields. `ruff` clean.
+- Frontend `tsc` clean; `vitest` green including new forest + mapper round-trip
+  tests.
+
+**Open**
+- Budget-vs-actual variance in the domain core (next slice), split transactions,
+  and the category-manager UI (color/icon pickers, drag-reorder) per the plan's
+  Stages 13–16.
+
+---
+
 ## Stage 11 — Open-source polish
 
 **Built**

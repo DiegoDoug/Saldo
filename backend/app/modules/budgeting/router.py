@@ -14,9 +14,12 @@ from sqlmodel import select
 from app.core.db import get_session
 from app.modules.budgeting.models import Category, Entry, utcnow
 from app.modules.budgeting.schemas import (
+    BudgetVarianceSummary,
     CategoryCreate,
     CategoryRead,
+    CategoryTreeNode,
     CategoryUpdate,
+    CategoryVarianceRow,
     EntryCreate,
     EntryRead,
     EntryUpdate,
@@ -24,14 +27,21 @@ from app.modules.budgeting.schemas import (
     YearSummary,
 )
 from app.modules.budgeting.service import (
+    build_category_tree,
     build_month_input,
     get_owned_category,
     get_owned_entry,
     list_entries_for_year,
+    month_budget_actuals,
+    validate_category_parent,
 )
 from app.modules.identity.dependencies import CurrentUser
 from app.shared.currency import FxRateProvider, get_fx_provider
-from app.shared.domain.budgeting import compute_month, compute_year
+from app.shared.domain.budgeting import (
+    compute_budget_variance,
+    compute_month,
+    compute_year,
+)
 
 router = APIRouter(prefix="/budgeting", tags=["budgeting"])
 
@@ -50,9 +60,15 @@ async def create_category(payload: CategoryCreate, user: CurrentUser, session: S
         name=payload.name,
         kind=payload.kind,
         position=payload.position,
+        parent_id=payload.parent_id,
+        color=payload.color,
+        icon=payload.icon,
     )
     if await session.get(Category, category.id) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "A category with this id already exists")
+    await validate_category_parent(
+        session, user.id, category_id=category.id, parent_id=category.parent_id, kind=category.kind
+    )
     session.add(category)
     await session.commit()
     await session.refresh(category)
@@ -69,6 +85,17 @@ async def list_categories(user: CurrentUser, session: Session, include_deleted: 
     return list(result.scalars().all())
 
 
+@router.get("/categories/tree", response_model=list[CategoryTreeNode])
+async def category_tree(user: CurrentUser, session: Session):
+    stmt = (
+        select(Category)
+        .where(Category.user_id == user.id, Category.deleted == False)  # noqa: E712
+        .order_by(Category.kind, Category.position)
+    )
+    result = await session.execute(stmt)
+    return build_category_tree(list(result.scalars().all()))
+
+
 @router.patch("/categories/{category_id}", response_model=CategoryRead)
 async def update_category(
     category_id: uuid.UUID, payload: CategoryUpdate, user: CurrentUser, session: Session
@@ -79,6 +106,12 @@ async def update_category(
     data = payload.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(category, key, value)
+    # Validate the resulting parent link (kind must match the possibly-updated kind).
+    if "parent_id" in data or "kind" in data:
+        await validate_category_parent(
+            session, user.id, category_id=category.id,
+            parent_id=category.parent_id, kind=category.kind,
+        )
     category.updated_at = utcnow()
     session.add(category)
     await session.commit()
@@ -216,6 +249,23 @@ async def month_summary(year: int, month: int, user: CurrentUser, session: Sessi
     month_input = await build_month_input(entries, user.default_currency, fx)
     computed = compute_month(month_input)
     return _month_summary(year, month, computed)
+
+
+@router.get("/variance/{year}/{month}", response_model=BudgetVarianceSummary)
+async def budget_variance(year: int, month: int, user: CurrentUser, session: Session):
+    budgets, actuals = await month_budget_actuals(session, user.id, year, month)
+    variance = compute_budget_variance(budgets, actuals)
+    return BudgetVarianceSummary(
+        year=year,
+        month=month,
+        budgeted_total=variance.budgeted_total,
+        actual_total=variance.actual_total,
+        remaining_total=variance.remaining_total,
+        by_category=[
+            CategoryVarianceRow(category_id=uuid.UUID(cid), **vars(row))
+            for cid, row in variance.by_category.items()
+        ],
+    )
 
 
 @router.get("/summary/{year}", response_model=YearSummary)

@@ -50,6 +50,93 @@ async def test_category_crud(client: AsyncClient) -> None:
     assert len(with_deleted.json()) == 1
 
 
+async def test_category_nesting_color_icon(client: AsyncClient) -> None:
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+
+    root = await client.post(
+        "/budgeting/categories",
+        json={"name": "Casa", "kind": "fixed", "color": "#6EE7B7", "icon": "House"},
+        headers=h,
+    )
+    assert root.status_code == 201
+    root_body = root.json()
+    assert root_body["color"] == "#6EE7B7"
+    assert root_body["icon"] == "House"
+    assert root_body["parent_id"] is None
+    root_id = root_body["id"]
+
+    child = await client.post(
+        "/budgeting/categories",
+        json={"name": "Luz", "kind": "fixed", "parent_id": root_id},
+        headers=h,
+    )
+    assert child.status_code == 201
+    assert child.json()["parent_id"] == root_id
+
+    # Tree endpoint nests the child under its root.
+    tree = await client.get("/budgeting/categories/tree", headers=h)
+    assert tree.status_code == 200
+    forest = tree.json()
+    assert len(forest) == 1
+    assert forest[0]["id"] == root_id
+    assert [c["name"] for c in forest[0]["children"]] == ["Luz"]
+
+
+async def test_subcategory_rejects_cross_kind_parent(client: AsyncClient) -> None:
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+    fixed = await client.post(
+        "/budgeting/categories", json={"name": "Casa", "kind": "fixed"}, headers=h
+    )
+    fixed_id = fixed.json()["id"]
+    # A variable child under a fixed parent is rejected (kind must be inherited).
+    bad = await client.post(
+        "/budgeting/categories",
+        json={"name": "Ocio", "kind": "variable", "parent_id": fixed_id},
+        headers=h,
+    )
+    assert bad.status_code == 400
+
+
+async def test_category_parent_cycle_rejected(client: AsyncClient) -> None:
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+    a = await client.post(
+        "/budgeting/categories", json={"name": "A", "kind": "variable"}, headers=h
+    )
+    a_id = a.json()["id"]
+    b = await client.post(
+        "/budgeting/categories",
+        json={"name": "B", "kind": "variable", "parent_id": a_id},
+        headers=h,
+    )
+    b_id = b.json()["id"]
+    # Re-parenting A under its own descendant B would form a cycle.
+    looped = await client.patch(
+        f"/budgeting/categories/{a_id}", json={"parent_id": b_id}, headers=h
+    )
+    assert looped.status_code == 400
+    # A category cannot be its own parent either.
+    self_loop = await client.patch(
+        f"/budgeting/categories/{a_id}", json={"parent_id": a_id}, headers=h
+    )
+    assert self_loop.status_code == 400
+
+
+async def test_category_parent_must_be_owned(client: AsyncClient) -> None:
+    ana = await auth_headers(client, "ana@example.com", "ana-passphrase")
+    beto = await auth_headers(client, "beto@example.com", "beto-passphrase")
+    ana_cat = await client.post(
+        "/budgeting/categories", json={"name": "Casa", "kind": "fixed"}, headers=ana
+    )
+    ana_id = ana_cat.json()["id"]
+    # Beto cannot nest his category under Ana's.
+    resp = await client.post(
+        "/budgeting/categories",
+        json={"name": "Luz", "kind": "fixed", "parent_id": ana_id},
+        headers=beto,
+    )
+    assert resp.status_code == 400
+
+
 async def test_entry_crud(client: AsyncClient) -> None:
     h = await auth_headers(client, "ana@example.com", "passphrase-1")
     created = await client.post(
@@ -134,6 +221,89 @@ async def test_year_summary_aggregates(client: AsyncClient) -> None:
     assert y["income_total"] == 12000
     assert len(y["per_month"]) == 12
     assert y["per_month"][5]["income_total"] == 1000
+
+
+# ----------------------------------------------------------------------
+# Budget-vs-actual variance
+# ----------------------------------------------------------------------
+async def _make_account(client: AsyncClient, h: dict) -> str:
+    resp = await client.post(
+        "/accounts", json={"name": "Checking", "type": "checking"}, headers=h
+    )
+    return resp.json()["id"]
+
+
+async def test_budget_variance_compares_entries_to_transactions(client: AsyncClient) -> None:
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+    aid = await _make_account(client, h)
+    cat = await client.post(
+        "/budgeting/categories", json={"name": "Súper", "kind": "variable"}, headers=h
+    )
+    cid = cat.json()["id"]
+
+    # Budget 200 for the category this month.
+    await client.post(
+        "/budgeting/entries",
+        json={"year": 2026, "month": 0, "kind": "variable", "amount": 200, "category_id": cid},
+        headers=h,
+    )
+    # Actual spend 120 + 100 = 220 (overspent). A transfer must not count.
+    for amt in (120, 100):
+        await client.post(
+            "/transactions",
+            json={"type": "expense", "amount": amt, "account_id": aid,
+                  "date": "2026-01-10", "category_id": cid},
+            headers=h,
+        )
+    await client.post(
+        "/transactions",
+        json={"type": "transfer", "amount": 999, "account_id": aid,
+              "transfer_account_id": aid, "date": "2026-01-10", "category_id": cid},
+        headers=h,
+    )
+    # A transaction in another month must not leak in.
+    await client.post(
+        "/transactions",
+        json={"type": "expense", "amount": 500, "account_id": aid,
+              "date": "2026-02-10", "category_id": cid},
+        headers=h,
+    )
+
+    resp = await client.get("/budgeting/variance/2026/0", headers=h)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["budgeted_total"] == 200
+    assert body["actual_total"] == 220
+    assert body["remaining_total"] == -20
+    row = next(r for r in body["by_category"] if r["category_id"] == cid)
+    assert row["actual"] == 220
+    assert row["over"] is True
+
+
+async def test_budget_variance_is_user_scoped(client: AsyncClient) -> None:
+    ana = await auth_headers(client, "ana@example.com", "ana-passphrase")
+    beto = await auth_headers(client, "beto@example.com", "beto-passphrase")
+    aid = await _make_account(client, ana)
+    cat = await client.post(
+        "/budgeting/categories", json={"name": "Súper", "kind": "variable"}, headers=ana
+    )
+    cid = cat.json()["id"]
+    await client.post(
+        "/budgeting/entries",
+        json={"year": 2026, "month": 0, "kind": "variable", "amount": 200, "category_id": cid},
+        headers=ana,
+    )
+    await client.post(
+        "/transactions",
+        json={"type": "expense", "amount": 50, "account_id": aid,
+              "date": "2026-01-10", "category_id": cid},
+        headers=ana,
+    )
+    # Beto's variance is empty; Ana's is intact.
+    beto_var = await client.get("/budgeting/variance/2026/0", headers=beto)
+    ana_var = await client.get("/budgeting/variance/2026/0", headers=ana)
+    assert beto_var.json()["actual_total"] == 0
+    assert ana_var.json()["actual_total"] == 50
 
 
 # ----------------------------------------------------------------------

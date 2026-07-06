@@ -57,6 +57,8 @@ class TransactionRead(BaseModel):
     merchant_id: uuid.UUID | None
     recurring_id: uuid.UUID | None
     category_id: uuid.UUID | None
+    split_parent: bool = False
+    parent_id: uuid.UUID | None = None
     date: date_type
     notes: str
     tags: list[str]
@@ -87,6 +89,40 @@ class BulkRequest(BaseModel):
 
 class BulkResponse(BaseModel):
     affected: int
+
+
+# --- Splits -------------------------------------------------------------
+class SplitChildCreate(BaseModel):
+    id: uuid.UUID | None = None
+    category_id: uuid.UUID | None = None
+    amount: float
+    notes: str = ""
+
+
+class SplitCreate(BaseModel):
+    """A split transaction: a parent container plus its categorized line items.
+
+    `amount` is the total and must equal the sum of the children (validated
+    server-side). Only income/expense split; transfers are not splittable.
+    """
+
+    id: uuid.UUID | None = None
+    type: Literal["income", "expense"]
+    amount: float
+    currency: str = "EUR"
+    account_id: uuid.UUID
+    merchant_id: uuid.UUID | None = None
+    date: date_type
+    notes: str = ""
+    tags: list[str] = []
+    children: list[SplitChildCreate]
+
+
+class SplitRead(BaseModel):
+    """A created split: the parent row plus its child leaf rows."""
+
+    parent: TransactionRead
+    children: list[TransactionRead]
 
 
 # --- Transfer helper ----------------------------------------------------

@@ -24,6 +24,7 @@ import {
   type LocalMerchant,
   type LocalNetWorthSnapshot,
   type LocalRecurringRule,
+  type LocalTag,
   type LocalTransaction,
 } from "../../db/db";
 import {
@@ -67,6 +68,7 @@ import {
   wireToLocalTransaction,
   type WireTransaction,
 } from "../transactions/mappers";
+import { localTagToSync, wireToLocalTag, type WireTag } from "../tags/mappers";
 import { pullSync, pushSync } from "./api";
 import { useSyncStore } from "./syncStore";
 
@@ -185,6 +187,16 @@ async function mergeSnapshots(incoming: WireSnapshot[] = []): Promise<void> {
   }
 }
 
+async function mergeTags(incoming: WireTag[] = []): Promise<void> {
+  for (const wt of incoming) {
+    const local = await db.tags.get(wt.id);
+    const next = wireToLocalTag(wt);
+    if (!local || toEpoch(next.updatedAt) >= toEpoch(local.updatedAt)) {
+      await db.tags.put(next);
+    }
+  }
+}
+
 function changedSince<
   T extends
     | LocalAccount
@@ -196,7 +208,8 @@ function changedSince<
     | LocalGoal
     | LocalAsset
     | LocalLiability
-    | LocalNetWorthSnapshot,
+    | LocalNetWorthSnapshot
+    | LocalTag,
 >(rows: T[], since?: string): T[] {
   if (!since) return rows;
   const cutoff = toEpoch(since);
@@ -269,6 +282,7 @@ async function doSync(): Promise<boolean> {
       localCategoryToSync,
     );
     const dirtyEntries = changedSince(await db.entries.toArray(), since).map(localEntryToSync);
+    const dirtyTags = changedSince(await db.tags.toArray(), since).map(localTagToSync);
 
     if (
       dirtyAccounts.length ||
@@ -280,7 +294,8 @@ async function doSync(): Promise<boolean> {
       dirtySnapshots.length ||
       dirtyTransactions.length ||
       dirtyCategories.length ||
-      dirtyEntries.length
+      dirtyEntries.length ||
+      dirtyTags.length
     ) {
       const pushed = await pushSync({
         accounts: dirtyAccounts,
@@ -293,6 +308,7 @@ async function doSync(): Promise<boolean> {
         transactions: dirtyTransactions,
         categories: dirtyCategories,
         entries: dirtyEntries,
+        tags: dirtyTags,
       });
       const conflicts =
         countConflicts(dirtyAccounts, pushed.accounts ?? []) +
@@ -304,7 +320,8 @@ async function doSync(): Promise<boolean> {
         countConflicts(dirtySnapshots, pushed.snapshots ?? []) +
         countConflicts(dirtyTransactions, pushed.transactions ?? []) +
         countConflicts(dirtyCategories, pushed.categories) +
-        countConflicts(dirtyEntries, pushed.entries);
+        countConflicts(dirtyEntries, pushed.entries) +
+        countConflicts(dirtyTags, pushed.tags ?? []);
       if (conflicts > 0) store.addConflicts(conflicts);
       await mergeAccounts(pushed.accounts);
       await mergeMerchants(pushed.merchants);
@@ -316,6 +333,7 @@ async function doSync(): Promise<boolean> {
       await mergeTransactions(pushed.transactions);
       await mergeCategories(pushed.categories);
       await mergeEntries(pushed.entries);
+      await mergeTags(pushed.tags);
     }
 
     const pulled = await pullSync(since);
@@ -329,6 +347,7 @@ async function doSync(): Promise<boolean> {
     await mergeTransactions(pulled.transactions);
     await mergeCategories(pulled.categories);
     await mergeEntries(pulled.entries);
+    await mergeTags(pulled.tags);
     await setMeta(LAST_SYNC_KEY, pulled.server_time);
     store.setLastSyncAt(pulled.server_time);
     store.setStatus("idle");
