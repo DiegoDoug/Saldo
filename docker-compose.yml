@@ -9,10 +9,9 @@
 # A named volume (saldo-data) holds the SQLite file so it survives rebuilds.
 # Copy .env.example to .env before running.
 #
-# Optional 4th service `mailpit` (profile "dev-mail") is a local SMTP sink for
-# testing the password-reset email without any DNS or real mail server — see
-# the service definition below. It stays OFF unless you opt in with:
-#   docker compose --profile dev-mail up
+# Password-reset email is sent via Resend (an HTTPS API, no mail container).
+# Set SALDO_RESEND_API_KEY in .env to enable it; leave it blank and emails are
+# logged to the backend console instead — see .env.example.
 # ============================================================
 
 services:
@@ -67,34 +66,6 @@ services:
     depends_on:
       - frontend
       - backend
-
-  # --- Local email testing (opt-in) -----------------------------------
-  # Mailpit is a tiny SMTP server that CAPTURES outbound mail instead of
-  # delivering it, and shows every message in a web inbox. It lets you test the
-  # password-reset flow end-to-end — see the real rendered email and click the
-  # actual reset link — with no domain, no DNS, and nothing leaving the box.
-  #
-  # It only runs when you ask for it (profile "dev-mail"):
-  #   docker compose --profile dev-mail up
-  #
-  # Then point the backend at it (in .env), and restart the backend:
-  #   SALDO_SMTP_HOST=mailpit
-  #   SALDO_SMTP_PORT=1025
-  #   SALDO_SMTP_STARTTLS=false
-  #   SALDO_SMTP_USER=
-  #   SALDO_SMTP_PASSWORD=
-  # Open the captured inbox at http://localhost:8025
-  mailpit:
-    image: axllent/mailpit:v1.20
-    restart: unless-stopped
-    profiles: ["dev-mail"]
-    ports:
-      - "8025:8025"   # web inbox UI
-      - "1025:1025"   # SMTP the backend submits to
-    environment:
-      MP_MAX_MESSAGES: 500
-      MP_SMTP_AUTH_ACCEPT_ANY: 1        # accept whatever creds (or none) the app sends
-      MP_SMTP_AUTH_ALLOW_INSECURE: 1    # allow plaintext submission (dev only)
 
 volumes:
   saldo-data:
