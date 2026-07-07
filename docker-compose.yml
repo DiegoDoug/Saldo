@@ -5,6 +5,7 @@
 #   - frontend    nginx serving the built bundle, proxies /api -> backend
 #   - backend     uvicorn running FastAPI
 #   - cloudflared the Cloudflare Tunnel (sole public ingress on a real deploy)
+#   - ngrok       optional ad-hoc public URL for local dev (see below)
 #
 # A named volume (saldo-data) holds the SQLite file so it survives rebuilds.
 # Copy .env.example to .env before running.
@@ -12,6 +13,11 @@
 # Password-reset email is sent via Resend (an HTTPS API, no mail container).
 # Set SALDO_RESEND_API_KEY in .env to enable it; leave it blank and emails are
 # logged to the backend console instead — see .env.example.
+#
+# ngrok is opt-in via a Compose profile so it never affects the default
+# `docker compose up`. Set NGROK_AUTHTOKEN in .env, then run:
+#   docker compose --profile ngrok up
+# and read the public URL from the ngrok dashboard at http://localhost:4040.
 # ============================================================
 
 services:
@@ -66,6 +72,22 @@ services:
     depends_on:
       - frontend
       - backend
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    profiles: ["ngrok"]
+    command:
+      - "http"
+      - "frontend:80"
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    ports:
+      # ngrok's local web inspector, also shows the assigned public URL.
+      - "4040:4040"
+    depends_on:
+      frontend:
+        condition: service_started
 
 volumes:
   saldo-data:
