@@ -55,6 +55,16 @@ export function useCategoryTree(): CategoryNode[] {
   return buildCategoryForest(categories);
 }
 
+/**
+ * A category's budgeted total: its own direct amount plus every descendant
+ * subcategory's amount, recursively. Leaf categories (no children) just
+ * return their own amount, so this is a safe drop-in for the flat case.
+ */
+export function rollupAmount(node: CategoryNode, amounts: Map<string, number>): number {
+  const own = amounts.get(node.id) ?? 0;
+  return node.children.reduce((sum, child) => sum + rollupAmount(child, amounts), own);
+}
+
 export function useMonthEntries(year: number, month: number): LocalEntry[] {
   return (
     useLiveQuery(

@@ -18,6 +18,9 @@ export const C = {
   lilac: "#7C6CA8",
 } as const;
 
+/** Horizontal indent, in pixels, per nesting level for a subcategory row. */
+export const CATEGORY_INDENT_PX = 18;
+
 export const CATEGORY_COLORS = [
   "#2F8F6F",
   "#3E6E8E",

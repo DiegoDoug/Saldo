@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LocalCategory } from "../../db/db";
-import { buildCategoryForest } from "./hooks";
+import { buildCategoryForest, rollupAmount } from "./hooks";
 import { localCategoryToSync, wireToLocalCategory, type WireCategory } from "./mappers";
 
 function cat(partial: Partial<LocalCategory>): LocalCategory {
@@ -35,6 +35,40 @@ describe("buildCategoryForest", () => {
     const orphan = cat({ id: "o", parentId: "missing" });
     const forest = buildCategoryForest([orphan]);
     expect(forest.map((c) => c.id)).toEqual(["o"]);
+  });
+});
+
+describe("rollupAmount", () => {
+  it("returns a leaf's own amount unchanged", () => {
+    const leaf = cat({ id: "l" });
+    const forest = buildCategoryForest([leaf]);
+    const amounts = new Map([["l", 42]]);
+    expect(rollupAmount(forest[0], amounts)).toBe(42);
+  });
+
+  it("sums a parent's own amount plus every subcategory, recursively", () => {
+    const root = cat({ id: "trip", name: "Viaje Malaga" });
+    const apartment = cat({ id: "apt", parentId: "trip", position: 0 });
+    const food = cat({ id: "food", parentId: "trip", position: 1 });
+    // A grandchild under "food" should roll all the way up to the root too.
+    const snacks = cat({ id: "snacks", parentId: "food", position: 0 });
+
+    const forest = buildCategoryForest([root, apartment, food, snacks]);
+    const amounts = new Map([
+      ["trip", 10], // the root's own pre-existing entry, if any
+      ["apt", 77],
+      ["food", 20],
+      ["snacks", 5],
+    ]);
+
+    expect(rollupAmount(forest[0], amounts)).toBe(10 + 77 + 20 + 5);
+  });
+
+  it("treats a category with no entry as zero", () => {
+    const root = cat({ id: "trip" });
+    const child = cat({ id: "c", parentId: "trip" });
+    const forest = buildCategoryForest([root, child]);
+    expect(rollupAmount(forest[0], new Map())).toBe(0);
   });
 });
 
