@@ -20,7 +20,12 @@ import app.core.metadata  # noqa: F401 - registers every module's tables
 from app.core.config import settings
 from app.modules.budgeting.models import Category
 from app.modules.merchants.models import Merchant
-from app.modules.receipt_import import draft_builder, extraction_service
+from app.modules.receipt_import import (
+    category_matching,
+    draft_builder,
+    extraction_service,
+    merchant_matching,
+)
 from app.modules.receipt_import.ai.base import (
     CategoryHint,
     ExtractionContext,
@@ -30,64 +35,197 @@ from app.modules.receipt_import.ai.base import (
 from app.modules.receipt_import.ai.deepseek_provider import DeepSeekProvider, ReceiptExtractionError
 from app.modules.receipt_import.ai.prompts import build_user_prompt
 from app.modules.receipt_import.ocr.tesseract_provider import TesseractOcrProvider
+from app.modules.receipt_import.schemas import CategoryMatch, MerchantMatch
 
-# --- draft_builder -------------------------------------------------------
+# --- draft_builder -----------------------------------------------------------
+# Merchant/category matching itself is exercised below (merchant_matching /
+# category_matching sections); these tests only cover assembling the rest of
+# the draft around already-computed match objects.
 
 
-def test_draft_builder_maps_semantic_matches() -> None:
-    category_id = uuid.uuid4()
-    merchant_id = uuid.uuid4()
-    raw = RawExtraction(
-        merchant_name="MERCADONA #12",
-        possible_merchant_id=merchant_id,
-        possible_category_id=category_id,
-        total=20.0,
-        currency="EUR",
-        confidence={"possible_merchant_id": 0.8, "possible_category_id": 0.75, "total": 0.9},
+NO_MERCHANT_MATCH = MerchantMatch(match_type="none", confidence=0.0)
+NO_CATEGORY_MATCH = CategoryMatch(match_type="suggest_new", confidence=0.0)
+
+
+def test_draft_builder_fills_fields_and_folds_in_matches() -> None:
+    merchant_match = MerchantMatch(
+        raw_text="Test", matched_merchant_id=uuid.uuid4(), match_type="exact", confidence=0.97
     )
-    draft = draft_builder.build(raw)
+    category_match = CategoryMatch(
+        matched_category_id=uuid.uuid4(), match_type="merchant_default", confidence=0.9
+    )
+    raw = RawExtraction(total=20.0, currency="EUR", confidence={"total": 0.9, "currency": 0.8})
 
-    assert draft.merchant.matched_merchant_id == merchant_id
-    assert draft.merchant.match_type == "semantic"
-    assert draft.category.matched_category_id == category_id
-    assert draft.category.match_type == "ai_semantic"
+    draft = draft_builder.build(raw, merchant_match, category_match)
+
+    assert draft.merchant is merchant_match
+    assert draft.category is category_match
     assert draft.amount.value == 20.0
     assert draft.amount.confidence == 0.9
 
 
-def test_draft_builder_suggests_new_category_without_a_match() -> None:
-    raw = RawExtraction(possible_category_name="Cafeterias", confidence={})
-    draft = draft_builder.build(raw)
-
-    assert draft.category.matched_category_id is None
-    assert draft.category.suggested_name == "Cafeterias"
-    assert draft.category.match_type == "suggest_new"
-
-
-def test_draft_builder_reports_no_merchant_match_and_passes_through_warnings() -> None:
+def test_draft_builder_passes_through_warnings_and_missing_fields() -> None:
     raw = RawExtraction(
-        merchant_name="Some Shop",
-        warnings=["OCR text looked truncated"],
-        missing_fields=["date"],
-        confidence={"merchant_name": 0.4},
+        warnings=["OCR text looked truncated"], missing_fields=["date"], confidence={}
     )
-    draft = draft_builder.build(raw)
+    draft = draft_builder.build(raw, NO_MERCHANT_MATCH, NO_CATEGORY_MATCH)
 
-    assert draft.merchant.match_type == "none"
-    assert draft.merchant.suggested_name == "Some Shop"
     assert draft.warnings == ["OCR text looked truncated"]
     assert draft.missing_fields == ["date"]
 
 
 def test_draft_builder_overall_confidence_averages_populated_fields() -> None:
     raw = RawExtraction(confidence={"total": 1.0, "currency": 0.5})
-    draft = draft_builder.build(raw)
+    draft = draft_builder.build(raw, NO_MERCHANT_MATCH, NO_CATEGORY_MATCH)
     assert draft.overall_confidence == 0.75
 
 
 def test_draft_builder_zero_confidence_when_nothing_extracted() -> None:
-    draft = draft_builder.build(RawExtraction())
+    draft = draft_builder.build(RawExtraction(), NO_MERCHANT_MATCH, NO_CATEGORY_MATCH)
     assert draft.overall_confidence == 0.0
+
+
+# --- merchant_matching --------------------------------------------------------
+
+
+async def test_merchant_matching_exact_normalized_match(session) -> None:
+    user_id = uuid.uuid4()
+    merchant = Merchant(user_id=user_id, name="Mercadona")
+    session.add(merchant)
+    await session.commit()
+
+    result = await merchant_matching.match(
+        session, user_id, RawExtraction(merchant_name="MERCADONA #12")
+    )
+
+    assert result.matched_merchant_id == merchant.id
+    assert result.match_type == "exact"
+    assert result.confidence >= 0.9
+
+
+async def test_merchant_matching_fuzzy_match(session) -> None:
+    user_id = uuid.uuid4()
+    merchant = Merchant(user_id=user_id, name="Mercadona")
+    session.add(merchant)
+    await session.commit()
+
+    result = await merchant_matching.match(
+        session, user_id, RawExtraction(merchant_name="Mercadana")  # one-letter typo
+    )
+
+    assert result.matched_merchant_id == merchant.id
+    assert result.match_type == "fuzzy"
+    assert 0.0 < result.confidence < 0.97
+
+
+async def test_merchant_matching_falls_back_to_ai_semantic_match(session) -> None:
+    user_id = uuid.uuid4()
+    # An unrelated merchant exists, but doesn't fuzzy-match — tiers 1-2 must
+    # fail before the AI's own semantic guess (tier 3) is used.
+    session.add(Merchant(user_id=user_id, name="Netflix"))
+    await session.commit()
+    semantic_id = uuid.uuid4()
+
+    result = await merchant_matching.match(
+        session,
+        user_id,
+        RawExtraction(
+            merchant_name="AMZN Mktp US",
+            possible_merchant_id=semantic_id,
+            confidence={"possible_merchant_id": 0.6},
+        ),
+    )
+
+    assert result.matched_merchant_id == semantic_id
+    assert result.match_type == "semantic"
+    assert result.confidence == 0.6
+
+
+async def test_merchant_matching_no_match_proposes_new(session) -> None:
+    result = await merchant_matching.match(
+        session, uuid.uuid4(), RawExtraction(merchant_name="Some New Shop")
+    )
+
+    assert result.matched_merchant_id is None
+    assert result.suggested_name == "Some New Shop"
+    assert result.match_type == "none"
+
+
+async def test_merchant_matching_no_merchant_name_at_all(session) -> None:
+    result = await merchant_matching.match(session, uuid.uuid4(), RawExtraction())
+    assert result.match_type == "none"
+    assert result.confidence == 0.0
+
+
+# --- category_matching ---------------------------------------------------------
+
+
+async def test_category_matching_prefers_merchant_default(session) -> None:
+    user_id = uuid.uuid4()
+    category = Category(user_id=user_id, name="Comida", kind="variable")
+    session.add(category)
+    await session.commit()
+    merchant = Merchant(user_id=user_id, name="Mercadona", category_id=category.id)
+    session.add(merchant)
+    await session.commit()
+
+    merchant_match = MerchantMatch(
+        matched_merchant_id=merchant.id, match_type="exact", confidence=0.97
+    )
+    result = await category_matching.match(session, user_id, RawExtraction(), merchant_match)
+
+    assert result.matched_category_id == category.id
+    assert result.match_type == "merchant_default"
+    assert result.confidence == 0.97
+
+
+async def test_category_matching_existing_similarity_without_a_merchant(session) -> None:
+    user_id = uuid.uuid4()
+    category = Category(user_id=user_id, name="Cafeterias", kind="variable")
+    session.add(category)
+    await session.commit()
+
+    result = await category_matching.match(
+        session, user_id, RawExtraction(possible_category_name="Cafeteria"), NO_MERCHANT_MATCH
+    )
+
+    assert result.matched_category_id == category.id
+    assert result.match_type == "existing_similarity"
+
+
+async def test_category_matching_ignores_income_categories(session) -> None:
+    user_id = uuid.uuid4()
+    session.add(Category(user_id=user_id, name="Nomina", kind="income"))
+    await session.commit()
+
+    result = await category_matching.match(
+        session, user_id, RawExtraction(possible_category_name="Nomina"), NO_MERCHANT_MATCH
+    )
+
+    assert result.matched_category_id is None
+
+
+async def test_category_matching_falls_back_to_ai_semantic(session) -> None:
+    category_id = uuid.uuid4()
+    result = await category_matching.match(
+        session,
+        uuid.uuid4(),
+        RawExtraction(possible_category_id=category_id, confidence={"possible_category_id": 0.6}),
+        NO_MERCHANT_MATCH,
+    )
+
+    assert result.matched_category_id == category_id
+    assert result.match_type == "ai_semantic"
+
+
+async def test_category_matching_suggests_new_when_nothing_matches(session) -> None:
+    result = await category_matching.match(
+        session, uuid.uuid4(), RawExtraction(possible_category_name="Buceo"), NO_MERCHANT_MATCH
+    )
+
+    assert result.matched_category_id is None
+    assert result.suggested_name == "Buceo"
+    assert result.match_type == "suggest_new"
 
 
 # --- ai/prompts ------------------------------------------------------------

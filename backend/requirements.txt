@@ -26,3 +26,5 @@ httpx==0.28.1
 # see Dockerfile / README's local-dev prerequisites, it isn't pip-installable)
 pytesseract==0.3.13
 pillow==11.1.0
+# Receipt import: fuzzy merchant/category name matching
+rapidfuzz==3.11.0

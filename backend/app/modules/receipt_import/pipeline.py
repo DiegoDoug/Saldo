@@ -1,7 +1,8 @@
 """Receipt pipeline orchestrator.
 
-Loads the stored image, runs OCR, calls the AI provider, builds the draft,
-and persists — each of those is its own module (`storage`, `ocr/`, `ai/`,
+Loads the stored image, runs OCR, calls the AI provider, matches a merchant
+and category, builds the draft, and persists — each of those is its own
+module (`storage`, `ocr/`, `ai/`, `merchant_matching`, `category_matching`,
 `draft_builder`); this file only sequences them, per
 docs/receipt-import/02-technical-design.md §1-2.
 
@@ -28,7 +29,13 @@ import uuid
 from app.core import db as core_db
 from app.modules.budgeting.models import utcnow
 from app.modules.identity.models import User
-from app.modules.receipt_import import draft_builder, extraction_service, storage
+from app.modules.receipt_import import (
+    category_matching,
+    draft_builder,
+    extraction_service,
+    merchant_matching,
+    storage,
+)
 from app.modules.receipt_import.ai.base import ReceiptExtractionProvider
 from app.modules.receipt_import.models import ReceiptImport
 from app.modules.receipt_import.ocr.base import OcrProvider
@@ -60,7 +67,12 @@ async def run_receipt_pipeline(
                 session, receipt.user_id, default_currency
             )
             raw = await ai_provider.extract(ocr_text, context)
-            draft = draft_builder.build(raw)
+
+            merchant_match = await merchant_matching.match(session, receipt.user_id, raw)
+            category_match = await category_matching.match(
+                session, receipt.user_id, raw, merchant_match
+            )
+            draft = draft_builder.build(raw, merchant_match, category_match)
 
             receipt.ocr_text = ocr_text
             receipt.ai_raw_response = raw.model_dump_json()

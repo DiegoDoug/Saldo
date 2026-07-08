@@ -107,13 +107,18 @@ async def test_upload_runs_pipeline_to_ready(client: AsyncClient, monkeypatch) -
     assert body["draft"]["amount"]["value"] == 12.5
     assert body["draft"]["amount"]["confidence"] == 0.95
     assert body["draft"]["merchant"]["raw_text"] == "Test Merchant"
-    assert body["draft"]["merchant"]["match_type"] == "none"  # no matching until Stage 3
+    assert body["draft"]["merchant"]["match_type"] == "none"  # no merchant of that name exists yet
     assert body["draft"]["overall_confidence"] > 0
 
 
-async def test_upload_wires_category_and_merchant_semantic_matches(
+async def test_upload_prefers_exact_merchant_match_and_inherits_its_category(
     client: AsyncClient, monkeypatch
 ) -> None:
+    """End-to-end proof of the matching priority order (Document 2 §5-6):
+    an exact normalized merchant match wins over the AI's own semantic guess,
+    and the category comes along for free via the merchant's default —
+    without the AI proposing a category at all.
+    """
     monkeypatch.setattr(settings, "deepseek_api_key", "test-key")
     h = await auth_headers(client, "ana@example.com", "passphrase-1")
 
@@ -121,15 +126,54 @@ async def test_upload_wires_category_and_merchant_semantic_matches(
     category = (
         await client.post("/budgeting/categories", json=category_payload, headers=h)
     ).json()
-    merchant = (await client.post("/merchants", json={"name": "Mercadona"}, headers=h)).json()
+    merchant = (
+        await client.post(
+            "/merchants",
+            json={"name": "Mercadona", "category_id": category["id"]},
+            headers=h,
+        )
+    ).json()
+
+    app.dependency_overrides[get_ai_provider] = lambda: FakeAiProvider(
+        # "MERCADONA #12" normalizes to the same text as the existing
+        # merchant's name — exact match should win even though no
+        # possible_merchant_id/possible_category_id was supplied at all.
+        raw=RawExtraction(merchant_name="MERCADONA #12", total=20.0, confidence={"total": 0.9})
+    )
+
+    resp = await upload(client, h)
+    receipt_id = resp.json()["id"]
+    body = (await client.get(f"/receipt-imports/{receipt_id}", headers=h)).json()
+
+    assert body["draft"]["merchant"]["matched_merchant_id"] == merchant["id"]
+    assert body["draft"]["merchant"]["match_type"] == "exact"
+    assert body["draft"]["category"]["matched_category_id"] == category["id"]
+    assert body["draft"]["category"]["match_type"] == "merchant_default"
+
+
+async def test_upload_falls_back_to_ai_semantic_match_when_no_local_match(
+    client: AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(settings, "deepseek_api_key", "test-key")
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+
+    category_payload = {"name": "Compras online", "kind": "variable"}
+    category = (
+        await client.post("/budgeting/categories", json=category_payload, headers=h)
+    ).json()
+    merchant = (await client.post("/merchants", json={"name": "Netflix"}, headers=h)).json()
 
     app.dependency_overrides[get_ai_provider] = lambda: FakeAiProvider(
         raw=RawExtraction(
-            merchant_name="MERCADONA #12",
+            # Doesn't fuzzy-match "Netflix" at all, so merchant matching must
+            # fall through to the AI's own semantic guess (no
+            # possible_category_name is given either, so category matching
+            # skips straight past the fuzzy tier to its own semantic guess).
+            merchant_name="AMZN Mktp US",
             possible_merchant_id=merchant["id"],
             possible_category_id=category["id"],
             total=20.0,
-            confidence={"possible_merchant_id": 0.8, "possible_category_id": 0.75, "total": 0.9},
+            confidence={"possible_merchant_id": 0.7, "possible_category_id": 0.65, "total": 0.9},
         )
     )
 
