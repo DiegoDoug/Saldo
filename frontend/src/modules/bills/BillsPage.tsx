@@ -5,9 +5,9 @@
  */
 
 import { CalendarClock, Check, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { type Frequency, type TransactionType } from "../../db/db";
+import { type Frequency, type LocalAccount, type TransactionType } from "../../db/db";
 import { formatMoney, parseAmount } from "../../shared/format";
 import { useAccounts } from "../accounts/hooks";
 import { useCategories } from "../budgeting/hooks";
@@ -28,6 +28,7 @@ export function BillsPage() {
   const rules = useRecurringRules();
   const upcoming = useUpcomingBills(60);
   const accounts = useAccounts(true);
+  const activeAccounts = useAccounts();
   const [adding, setAdding] = useState(false);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -50,7 +51,7 @@ export function BillsPage() {
         </button>
       </header>
 
-      {adding && <AddRuleForm onDone={() => setAdding(false)} />}
+      {adding && <AddRuleForm accounts={activeAccounts} onDone={() => setAdding(false)} />}
 
       {accounts.length === 0 ? (
         <EmptyState
@@ -141,8 +142,7 @@ export function BillsPage() {
   );
 }
 
-function AddRuleForm({ onDone }: { onDone: () => void }) {
-  const accounts = useAccounts();
+function AddRuleForm({ accounts, onDone }: { accounts: LocalAccount[]; onDone: () => void }) {
   const categories = useCategories();
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -151,6 +151,15 @@ function AddRuleForm({ onDone }: { onDone: () => void }) {
   const [frequency, setFrequency] = useState<Frequency>("monthly");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const type: TransactionType = "expense";
+
+  // `accounts` can still be empty on this form's first render (the Dexie live
+  // query resolves asynchronously), so the `useState` initializer above may
+  // have locked onto "". Adopt the first account once real data arrives.
+  useEffect(() => {
+    if (accounts.length > 0 && !accounts.some((a) => a.id === accountId)) {
+      setAccountId(accounts[0].id);
+    }
+  }, [accounts, accountId]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
