@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     receipt_storage_dir: str = "./data/receipts"
     receipt_max_upload_mb: int = 10
 
+    # Tesseract language packs to run, "+"-joined (see Dockerfile). Spanish +
+    # English cover this app's primary audience by default.
+    ocr_languages: str = "spa+eng"
+
     # DeepSeek does the structured extraction (docs/receipt-import/05-ai-integration-design.md).
     # Leaving `deepseek_api_key` blank disables the whole feature — the upload
     # endpoint returns 503 rather than degrading silently — same "off by

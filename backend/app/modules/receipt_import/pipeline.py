@@ -1,59 +1,78 @@
 """Receipt pipeline orchestrator.
 
-**Stage 1 stub.** No OCR or AI provider exists yet — Stage 2 replaces the body
-of `run_receipt_pipeline` with the real OCR -> DeepSeek -> merchant/category
-matching sequence from docs/receipt-import/02-technical-design.md §2, running
-in a background task. This stub proves the upload/status/confirm/discard
-lifecycle end-to-end against a fixed, always-low-confidence draft before any
-external API is involved.
+Loads the stored image, runs OCR, calls the AI provider, builds the draft,
+and persists — each of those is its own module (`storage`, `ocr/`, `ai/`,
+`draft_builder`); this file only sequences them, per
+docs/receipt-import/02-technical-design.md §1-2.
 
-`router.py` only ever calls this module's `run_receipt_pipeline` (plus
-`storage.py` directly for the raw image) — it never imports OCR/AI code. That
-stays true after Stage 2 lands; only this file's internals change.
+Runs via FastAPI `BackgroundTasks` (scheduled in `router.py`), which means it
+executes *after* the request's own DB session has already been closed —
+FastAPI closes yield-dependencies before running background tasks (verified
+empirically against this project's pinned FastAPI version; the two run in the
+opposite order to what the "0.106.0 changed this" folklore suggests). So this
+function always opens its own session via `app.core.db.async_session_maker`
+rather than reusing the request's.
+
+It never resolves its own OCR/AI providers, either: `router.py` resolves them
+through normal, overridable FastAPI `Depends` and passes the already-resolved
+instances in, so provider selection stays testable through
+`app.dependency_overrides` exactly like every other external-API dependency
+in this codebase (see `shared/currency.py`'s `get_fx_provider`).
+
+`router.py` only ever imports this module's `run_receipt_pipeline` plus
+`storage.py` — never OCR/AI code directly.
 """
 
 import uuid
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.core import db as core_db
 from app.modules.budgeting.models import utcnow
+from app.modules.identity.models import User
+from app.modules.receipt_import import draft_builder, extraction_service, storage
+from app.modules.receipt_import.ai.base import ReceiptExtractionProvider
 from app.modules.receipt_import.models import ReceiptImport
-from app.modules.receipt_import.schemas import (
-    CategoryMatch,
-    DraftReceiptAnalysis,
-    FieldValue,
-    MerchantMatch,
-)
+from app.modules.receipt_import.ocr.base import OcrProvider
 
 
-async def run_receipt_pipeline(session: AsyncSession, receipt_id: uuid.UUID) -> None:
-    """Process one `ReceiptImport` row in place: uploaded -> processing -> ready|failed."""
-    receipt = await session.get(ReceiptImport, receipt_id)
-    if receipt is None:
-        return
+async def run_receipt_pipeline(
+    receipt_id: uuid.UUID,
+    ocr_provider: OcrProvider,
+    ai_provider: ReceiptExtractionProvider,
+) -> None:
+    """Process one `ReceiptImport` row: uploaded -> processing -> ready|failed."""
+    async with core_db.async_session_maker() as session:
+        receipt = await session.get(ReceiptImport, receipt_id)
+        if receipt is None:
+            return
 
-    receipt.status = "processing"
-    receipt.updated_at = utcnow()
-    session.add(receipt)
-    await session.commit()
+        receipt.status = "processing"
+        receipt.updated_at = utcnow()
+        session.add(receipt)
+        await session.commit()
 
-    draft = _stub_draft()
-    receipt.draft_json = draft.model_dump_json()
-    receipt.status = "ready"
-    receipt.updated_at = utcnow()
-    session.add(receipt)
-    await session.commit()
+        try:
+            image_bytes = storage.load_image(receipt.image_path)
+            ocr_text = await ocr_provider.extract_text([image_bytes], receipt.mime_type)
 
+            user = await session.get(User, receipt.user_id)
+            default_currency = user.default_currency if user else "EUR"
+            context = await extraction_service.build_context(
+                session, receipt.user_id, default_currency
+            )
+            raw = await ai_provider.extract(ocr_text, context)
+            draft = draft_builder.build(raw)
 
-def _stub_draft() -> DraftReceiptAnalysis:
-    """Fixed placeholder draft, replaced in Stage 2 by real extraction + matching."""
-    return DraftReceiptAnalysis(
-        merchant=MerchantMatch(match_type="none", confidence=0.0),
-        category=CategoryMatch(match_type="suggest_new", confidence=0.0),
-        amount=FieldValue(value=None, confidence=0.0),
-        currency=FieldValue(value=None, confidence=0.0),
-        date=FieldValue(value=None, confidence=0.0),
-        warnings=["El pipeline de OCR/IA aún no está implementado (Stage 1)."],
-        missing_fields=["merchant", "amount", "currency", "date"],
-        overall_confidence=0.0,
-    )
+            receipt.ocr_text = ocr_text
+            receipt.ai_raw_response = raw.model_dump_json()
+            receipt.draft_json = draft.model_dump_json()
+            receipt.status = "ready"
+        except Exception as exc:
+            # Any pipeline failure lands the receipt in "failed" with a
+            # message the user can see — never a half-built or fabricated
+            # draft (the brief's "never fabricate" requirement, Document 5 §4).
+            receipt.status = "failed"
+            receipt.error_message = str(exc)[:500]
+
+        receipt.updated_at = utcnow()
+        session.add(receipt)
+        await session.commit()

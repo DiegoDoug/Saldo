@@ -43,15 +43,13 @@ class ExtractionContext(BaseModel):
 `ai/dependency.py`:
 
 ```python
-def get_ai_provider(settings: Settings = Depends(get_settings)) -> ReceiptExtractionProvider:
-    match settings.ai_provider:  # SALDO_AI_PROVIDER, default "deepseek"
-        case "deepseek":
-            return DeepSeekProvider(api_key=settings.deepseek_api_key, ...)
-        case other:
-            raise ValueError(f"Unknown AI provider: {other}")
+def get_ai_provider() -> ReceiptExtractionProvider:
+    return _provider  # a module-level DeepSeekProvider() singleton
 ```
 
-Same `get_*_provider()` DI shape as `shared/currency.py`'s `get_fx_provider()`, overridable in tests with a fake provider that returns a fixed `RawExtraction` — the entire pipeline is testable with zero real API calls (important, since CI shouldn't spend DeepSeek credits per run).
+**As-built simplification:** the `match settings.ai_provider` dispatch originally sketched here was cut — with exactly one implementation, a `match` with one real branch was dead weight (`CLAUDE.md`: "don't design for hypothetical future requirements"). `DeepSeekProvider` itself takes no constructor arguments and reads `settings.deepseek_*` at call time (same convention `identity/email.py` uses for `resend_api_key`), so a second provider is still a same-shape drop-in whenever one actually exists — a selector setting is one `if` away, not a redesign.
+
+Same `get_*_provider()` DI shape as `shared/currency.py`'s `get_fx_provider()`. `router.py` resolves it via `Depends(get_ai_provider)` and passes the resolved instance into the background task rather than having the task re-resolve it — that's what keeps it overridable in tests (`app.dependency_overrides`) with a fake provider returning a fixed `RawExtraction`, with zero real API calls (important, since CI shouldn't spend DeepSeek credits per run).
 
 ## 2. Config, and honoring the project's own "off by default" stance
 
@@ -61,12 +59,13 @@ Same `get_*_provider()` DI shape as `shared/currency.py`'s `get_fx_provider()`, 
 deepseek_api_key: str = ""
 deepseek_model: str = "deepseek-chat"
 deepseek_base_url: str = "https://api.deepseek.com"
-ai_provider: str = "deepseek"
 
 @property
 def deepseek_enabled(self) -> bool:
-    return bool(self.deepseek_api_key)
+    return bool(self.deepseek_api_key.strip())
 ```
+
+(No `ai_provider` setting — see §1's as-built note; it isn't needed until a second provider exists.)
 
 If `deepseek_enabled` is `False`, `POST /receipt-imports` returns `503` with a clear message, and the frontend hides the "Escanear recibo" entry point entirely (surfaced via the existing pattern of feature-flag-by-config, checked once at app load — no new "feature flags" system needed for one flag). This is not optional polish: `docs/transformation/05-technical-roadmap.md:78` already commits this project to LLM features being "off by default; no data leaves the host unless the user points it somewhere." Shipping this feature pre-configured-off by default is how the brief's explicit DeepSeek requirement and the project's own privacy stance both hold at once — a self-hoster who never sets `SALDO_DEEPSEEK_API_KEY` runs an app that never makes an external AI call, full stop.
 
@@ -83,15 +82,11 @@ class OcrProvider(Protocol):
 
 DeepSeek's chat models are text-only, so a real OCR step is not a design nicety here — without it there is no text to send the LLM. The two real candidates were local Tesseract (free, no key, works fully offline, weaker on crumpled thermal-paper photos) versus a cloud OCR API (better raw accuracy, a second external dependency and recurring cost on top of DeepSeek). **Decision: `TesseractOcrProvider` is the v1 implementation and the default**, prioritizing the self-hosted/zero-external-dependency posture the rest of this design (§2) already commits to for DeepSeek itself — a self-hoster who configures nothing beyond `SALDO_DEEPSEEK_API_KEY` should not also need a second cloud account just to get OCR. `OcrProvider`'s interface is unaffected by this choice: a cloud provider (Google Vision, Azure Document Intelligence) remains a drop-in follow-up (`SALDO_OCR_PROVIDER=google_vision`) if extraction quality on real-world receipts turns out to need it — nothing above this file's boundary changes when that happens.
 
-`ocr/dependency.py` mirrors `ai/dependency.py`'s `get_*_provider()` shape:
+`ocr/dependency.py` mirrors `ai/dependency.py`'s `get_*_provider()` shape — a plain singleton getter, same as-built simplification as §1 (no `SALDO_OCR_PROVIDER` dispatch until a second implementation exists):
 
 ```python
-def get_ocr_provider(settings: Settings = Depends(get_settings)) -> OcrProvider:
-    match settings.ocr_provider:  # SALDO_OCR_PROVIDER, default "tesseract"
-        case "tesseract":
-            return TesseractOcrProvider()
-        case other:
-            raise ValueError(f"Unknown OCR provider: {other}")
+def get_ocr_provider() -> OcrProvider:
+    return _provider  # a module-level TesseractOcrProvider() singleton
 ```
 
 ## 4. Prompt design (Phase 8)
@@ -105,7 +100,7 @@ System prompt (paraphrased structure — full text lives in `ai/prompts.py`, not
 - **Confidence honesty instruction:** "If you are not reasonably certain of a field, set its confidence below 0.5 and add it to `missing_fields` rather than fabricating a plausible-looking value." This is the load-bearing instruction for the whole confidence system (Document 2 §4) — a model that always reports 0.95 makes the confidence UI worthless, so the prompt asks explicitly for calibrated uncertainty and the review screen treats sub-threshold fields as needing a human look regardless of what value is present.
 - **Few-shot example**: one worked example (garbled OCR in, clean JSON out including a couple of intentionally low-confidence fields) — concrete evidence beats abstract instruction for JSON-shape compliance with smaller/cheaper models.
 
-`extraction_service.py` parses the response into `RawExtraction`, and if JSON parsing fails despite `response_format` (defensive, not expected) or required keys are missing, that's a pipeline failure (`status="failed"`), not a best-effort partial draft — matches the brief's "never fabricate."
+`ai/deepseek_provider.py` parses the response into `RawExtraction` itself (not `extraction_service.py`, which only builds the `ExtractionContext` — see Document 2 §1's file layout); if JSON parsing fails despite `response_format` (defensive, not expected) or the shape is unusable, it raises `ReceiptExtractionError`, which `pipeline.py` catches like any other pipeline failure (`status="failed"`), never a best-effort partial draft — matches the brief's "never fabricate."
 
 ## 5. Where each Phase 4/5 matching result actually comes from
 

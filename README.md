@@ -82,7 +82,10 @@ the internet and Raspberry Pi notes, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.
 ## Local development (without Docker)
 
 ```bash
-# Backend
+# Backend — the receipt-import feature's OCR step shells out to the Tesseract
+# binary, not just a pip package: `apt install tesseract-ocr tesseract-ocr-spa`
+# (or your OS equivalent) first. The rest of the app works without it; only
+# `POST /receipt-imports` needs it, and only once SALDO_DEEPSEEK_API_KEY is set.
 cd backend
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements-dev.txt

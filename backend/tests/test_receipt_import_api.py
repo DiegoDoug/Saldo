@@ -1,17 +1,62 @@
 """Receipt import API: upload/status/list/draft-edit/confirm/discard, isolation,
-duplicate detection, and the feature-disabled gate.
+duplicate detection, the feature-disabled gate, and the pipeline's
+success/failure outcomes.
 
-Stage 1 runs a stub pipeline (no real OCR/AI calls — see
-`app/modules/receipt_import/pipeline.py`), so every upload here resolves to
-`status == "ready"` synchronously with a fixed low-confidence draft. Stage 2
-introduces the real pipeline and BackgroundTasks without changing this
-contract test's shape.
+OCR and the AI provider are always faked here via `app.dependency_overrides`
+(same pattern `test_currency.py` uses for `get_fx_provider`) — these are
+HTTP/orchestration tests, not a test of real Tesseract or DeepSeek output.
+`test_receipt_import_pipeline.py` covers `draft_builder`, the DeepSeek request
+shape, and a real-Tesseract smoke test in isolation.
+
+Upload returns 202 with the row as it stood *before* the background pipeline
+ran (FastAPI sends the response, then runs background tasks — see
+`pipeline.py`'s docstring), so tests that need the final outcome follow up
+with a GET. Under `httpx`'s `ASGITransport`, a background task added during a
+request has already finished by the time `await client.post(...)` returns
+control here, so this GET is deterministic, not a real poll loop.
 """
 
 import pytest
 from httpx import AsyncClient
 
 from app.core.config import settings
+from app.main import app
+from app.modules.receipt_import.ai.base import RawExtraction
+from app.modules.receipt_import.ai.dependency import get_ai_provider
+from app.modules.receipt_import.ocr.dependency import get_ocr_provider
+
+
+class FakeOcrProvider:
+    async def extract_text(self, images, mime_type):
+        return "FAKE OCR TEXT"
+
+
+class FakeAiProvider:
+    """Deterministic stand-in for DeepSeek — these tests never touch the network."""
+
+    def __init__(self, raw: RawExtraction | None = None, error: Exception | None = None):
+        self.raw = raw
+        self.error = error
+
+    async def extract(self, ocr_text, context):
+        if self.error is not None:
+            raise self.error
+        return self.raw or RawExtraction(
+            merchant_name="Test Merchant",
+            date="2026-07-06",
+            currency="USD",
+            total=12.5,
+            confidence={"merchant_name": 0.9, "date": 0.9, "currency": 0.9, "total": 0.95},
+        )
+
+
+@pytest.fixture(autouse=True)
+def _fake_providers():
+    app.dependency_overrides[get_ocr_provider] = lambda: FakeOcrProvider()
+    app.dependency_overrides[get_ai_provider] = lambda: FakeAiProvider()
+    yield
+    app.dependency_overrides.pop(get_ocr_provider, None)
+    app.dependency_overrides.pop(get_ai_provider, None)
 
 
 @pytest.fixture(autouse=True)
@@ -33,13 +78,12 @@ async def auth_headers(client: AsyncClient, email: str, password: str) -> dict[s
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
 
-async def upload(client: AsyncClient, h: dict, data: bytes = TINY_PNG) -> dict:
-    resp = await client.post(
+async def upload(client: AsyncClient, h: dict, data: bytes = TINY_PNG):
+    return await client.post(
         "/receipt-imports",
         files={"file": ("receipt.png", data, "image/png")},
         headers=h,
     )
-    return resp
 
 
 async def test_upload_disabled_without_api_key(client: AsyncClient, monkeypatch) -> None:
@@ -49,19 +93,74 @@ async def test_upload_disabled_without_api_key(client: AsyncClient, monkeypatch)
     assert resp.status_code == 503
 
 
-async def test_upload_runs_stub_pipeline_to_ready(client: AsyncClient, monkeypatch) -> None:
+async def test_upload_runs_pipeline_to_ready(client: AsyncClient, monkeypatch) -> None:
     monkeypatch.setattr(settings, "deepseek_api_key", "test-key")
     h = await auth_headers(client, "ana@example.com", "passphrase-1")
-    resp = await upload(client, h)
-    assert resp.status_code == 201
-    body = resp.json()
-    assert body["status"] == "ready"
-    assert body["draft"]["overall_confidence"] == 0.0
-    assert "merchant" in body["draft"]["missing_fields"]
 
-    fetched = await client.get(f"/receipt-imports/{body['id']}", headers=h)
-    assert fetched.status_code == 200
-    assert fetched.json()["draft"]["warnings"]
+    resp = await upload(client, h)
+    assert resp.status_code == 202
+    receipt_id = resp.json()["id"]
+
+    fetched = await client.get(f"/receipt-imports/{receipt_id}", headers=h)
+    body = fetched.json()
+    assert body["status"] == "ready"
+    assert body["draft"]["amount"]["value"] == 12.5
+    assert body["draft"]["amount"]["confidence"] == 0.95
+    assert body["draft"]["merchant"]["raw_text"] == "Test Merchant"
+    assert body["draft"]["merchant"]["match_type"] == "none"  # no matching until Stage 3
+    assert body["draft"]["overall_confidence"] > 0
+
+
+async def test_upload_wires_category_and_merchant_semantic_matches(
+    client: AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(settings, "deepseek_api_key", "test-key")
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+
+    category_payload = {"name": "Comida", "kind": "variable"}
+    category = (
+        await client.post("/budgeting/categories", json=category_payload, headers=h)
+    ).json()
+    merchant = (await client.post("/merchants", json={"name": "Mercadona"}, headers=h)).json()
+
+    app.dependency_overrides[get_ai_provider] = lambda: FakeAiProvider(
+        raw=RawExtraction(
+            merchant_name="MERCADONA #12",
+            possible_merchant_id=merchant["id"],
+            possible_category_id=category["id"],
+            total=20.0,
+            confidence={"possible_merchant_id": 0.8, "possible_category_id": 0.75, "total": 0.9},
+        )
+    )
+
+    resp = await upload(client, h)
+    receipt_id = resp.json()["id"]
+    body = (await client.get(f"/receipt-imports/{receipt_id}", headers=h)).json()
+
+    assert body["draft"]["merchant"]["matched_merchant_id"] == merchant["id"]
+    assert body["draft"]["merchant"]["match_type"] == "semantic"
+    assert body["draft"]["category"]["matched_category_id"] == category["id"]
+    assert body["draft"]["category"]["match_type"] == "ai_semantic"
+
+
+async def test_pipeline_failure_marks_receipt_failed(client: AsyncClient, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "deepseek_api_key", "test-key")
+    app.dependency_overrides[get_ai_provider] = lambda: FakeAiProvider(
+        error=RuntimeError("DeepSeek is down")
+    )
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+
+    resp = await upload(client, h)
+    receipt_id = resp.json()["id"]
+    body = (await client.get(f"/receipt-imports/{receipt_id}", headers=h)).json()
+
+    assert body["status"] == "failed"
+    assert "DeepSeek is down" in body["error_message"]
+    assert body["draft"] is None
+    # A failed receipt is neither editable nor confirmable.
+    assert (
+        await client.patch(f"/receipt-imports/{receipt_id}/draft", json={}, headers=h)
+    ).status_code == 409
 
 
 async def test_rejects_unsupported_content_type(client: AsyncClient, monkeypatch) -> None:
@@ -90,6 +189,9 @@ async def test_duplicate_upload_returns_existing(client: AsyncClient, monkeypatc
     second = (await upload(client, h)).json()
     assert second["id"] == first["id"]
     assert second["duplicate_of"] == first["id"]
+    # The duplicate response reflects the *original* upload's finished
+    # pipeline run, not a fresh "processing" row.
+    assert second["status"] == "ready"
 
     listed = await client.get("/receipt-imports", headers=h)
     assert listed.json()["total"] == 1

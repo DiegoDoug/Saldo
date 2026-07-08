@@ -1,10 +1,17 @@
 """Receipt-import HTTP endpoints.
 
 Every route depends on `CurrentUser` and scopes queries by `user.id`, same
-convention as every other module. This router never imports OCR/AI code
-directly — only `pipeline.run_receipt_pipeline` and `storage` — so Stage 2
-swaps the pipeline's internals without touching this file (see
+convention as every other module. This router resolves the OCR/AI providers
+through normal FastAPI `Depends` (so tests can substitute fakes via
+`app.dependency_overrides`, same as `shared/currency.py`'s `get_fx_provider`)
+and hands the already-resolved instances to `pipeline.run_receipt_pipeline` —
+it never imports OCR/AI *implementation* code itself (see
 docs/receipt-import/02-technical-design.md §1).
+
+Upload schedules the pipeline via `BackgroundTasks` rather than awaiting it
+inline: OCR + an LLM call take real time, and the request shouldn't block on
+either. `pipeline.py`'s own docstring explains why it opens its own DB session
+rather than reusing this request's.
 
 The AI pipeline never writes a Transaction/Merchant/Category. `confirm` only
 records that a receipt produced a given (client-generated) transaction id for
@@ -17,7 +24,7 @@ import json
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +33,11 @@ from app.core.db import get_session
 from app.modules.budgeting.models import utcnow
 from app.modules.identity.dependencies import CurrentUser
 from app.modules.receipt_import import storage
+from app.modules.receipt_import.ai.base import ReceiptExtractionProvider
+from app.modules.receipt_import.ai.dependency import get_ai_provider
 from app.modules.receipt_import.models import ReceiptImport
+from app.modules.receipt_import.ocr.base import OcrProvider
+from app.modules.receipt_import.ocr.dependency import get_ocr_provider
 from app.modules.receipt_import.pipeline import run_receipt_pipeline
 from app.modules.receipt_import.schemas import (
     ConfirmReceiptRequest,
@@ -44,6 +55,8 @@ from app.modules.receipt_import.service import (
 router = APIRouter(prefix="/receipt-imports", tags=["receipt-imports"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+OcrDep = Annotated[OcrProvider, Depends(get_ocr_provider)]
+AiDep = Annotated[ReceiptExtractionProvider, Depends(get_ai_provider)]
 
 
 def _to_read(
@@ -65,8 +78,15 @@ def _to_read(
     )
 
 
-@router.post("", response_model=ReceiptImportRead, status_code=status.HTTP_201_CREATED)
-async def upload_receipt(user: CurrentUser, session: Session, file: UploadFile):
+@router.post("", response_model=ReceiptImportRead, status_code=status.HTTP_202_ACCEPTED)
+async def upload_receipt(
+    user: CurrentUser,
+    session: Session,
+    file: UploadFile,
+    background_tasks: BackgroundTasks,
+    ocr_provider: OcrDep,
+    ai_provider: AiDep,
+):
     if not settings.deepseek_enabled:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Receipt import is not configured on this server"
@@ -96,17 +116,16 @@ async def upload_receipt(user: CurrentUser, session: Session, file: UploadFile):
         content_hash=content_hash,
         image_path=relative_path,
         mime_type=file.content_type,
+        status="processing",
     )
     session.add(receipt)
     await session.commit()
     await session.refresh(receipt)
 
-    # Stage 1: the stub pipeline is instant, so it runs inline rather than via
-    # BackgroundTasks. Stage 2 moves this behind BackgroundTasks once OCR/AI
-    # calls make it worth returning before processing finishes (see
-    # docs/receipt-import/07-implementation-roadmap.md, Stage 2).
-    await run_receipt_pipeline(session, receipt.id)
-    await session.refresh(receipt)
+    # Runs after this response has already been sent (see `pipeline.py`'s
+    # docstring) — the client learns the outcome via GET /receipt-imports/{id}
+    # polling, not from this response body.
+    background_tasks.add_task(run_receipt_pipeline, receipt.id, ocr_provider, ai_provider)
     return _to_read(receipt)
 
 
