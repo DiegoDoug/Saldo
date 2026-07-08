@@ -1,21 +1,79 @@
+/**
+ * State-machine-level tests for the dialog (capture -> processing ->
+ * ready/failed -> confirmed). The "ready" step's own field-level behavior
+ * (prefill, confidence badges, inline create, confirm) is covered in depth by
+ * `ReceiptReviewForm.test.tsx`; here it's mocked out to a fixed set of
+ * accounts/categories/merchants, same reasoning as that file (jsdom has no
+ * IndexedDB, so Dexie-backed hooks are mocked rather than hit for real).
+ */
+
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { LocalAccount, LocalCategory, LocalMerchant } from "../../db/db";
 import { ApiError } from "../../shared/api/client";
 import { renderWithProviders } from "../../test/utils";
 import type { ReceiptImport } from "./api";
 import { ReceiptImportDialog } from "./ReceiptImportDialog";
 
-const { uploadReceipt, getReceipt, discardReceipt } = vi.hoisted(() => ({
+const ACCOUNT: LocalAccount = {
+  id: "acc1",
+  name: "Cuenta corriente",
+  type: "checking",
+  currency: "EUR",
+  openingBalance: 0,
+  color: "",
+  icon: "",
+  position: 0,
+  archived: 0,
+  updatedAt: "2026-01-01T00:00:00Z",
+  deleted: 0,
+};
+const MERCHANT: LocalMerchant = {
+  id: "m1",
+  name: "Mercadona",
+  logo: "",
+  color: "",
+  categoryId: null,
+  website: "",
+  location: "",
+  recurringProbability: 0,
+  updatedAt: "2026-01-01T00:00:00Z",
+  deleted: 0,
+};
+const CATEGORY: LocalCategory = {
+  id: "c1",
+  name: "Supermercado",
+  kind: "variable",
+  position: 0,
+  parentId: null,
+  color: null,
+  icon: null,
+  updatedAt: "2026-01-01T00:00:00Z",
+  deleted: 0,
+};
+
+const { useAccounts } = vi.hoisted(() => ({ useAccounts: vi.fn() }));
+const { useCategories } = vi.hoisted(() => ({ useCategories: vi.fn() }));
+const { useMerchants } = vi.hoisted(() => ({ useMerchants: vi.fn() }));
+const { addTransaction } = vi.hoisted(() => ({ addTransaction: vi.fn() }));
+
+vi.mock("../accounts/hooks", () => ({ useAccounts }));
+vi.mock("../budgeting/hooks", () => ({ useCategories }));
+vi.mock("../merchants/hooks", () => ({ useMerchants }));
+vi.mock("../transactions/localRepo", () => ({ addTransaction }));
+
+const { uploadReceipt, getReceipt, discardReceipt, confirmReceipt } = vi.hoisted(() => ({
   uploadReceipt: vi.fn(),
   getReceipt: vi.fn(),
   discardReceipt: vi.fn(),
+  confirmReceipt: vi.fn(),
 }));
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, uploadReceipt, getReceipt, discardReceipt };
+  return { ...actual, uploadReceipt, getReceipt, discardReceipt, confirmReceipt };
 });
 
 function makeFile() {
@@ -32,12 +90,17 @@ const READY_RECEIPT: ReceiptImport = {
   draft: {
     merchant: {
       rawText: "Mercadona",
-      matchedMerchantId: null,
-      suggestedName: "Mercadona",
-      matchType: "none",
-      confidence: 0.6,
+      matchedMerchantId: "m1",
+      suggestedName: null,
+      matchType: "exact",
+      confidence: 0.97,
     },
-    category: { matchedCategoryId: null, suggestedName: null, matchType: "suggest_new", confidence: 0 },
+    category: {
+      matchedCategoryId: "c1",
+      suggestedName: null,
+      matchType: "merchant_default",
+      confidence: 0.9,
+    },
     amount: { value: 12.5, confidence: 0.95 },
     currency: { value: "EUR", confidence: 0.9 },
     date: { value: "2026-07-06", confidence: 0.9 },
@@ -49,14 +112,19 @@ const READY_RECEIPT: ReceiptImport = {
     lineItems: [],
     warnings: [],
     missingFields: [],
-    overallConfidence: 0.8,
+    overallConfidence: 0.9,
   },
 };
 
 beforeEach(() => {
+  useAccounts.mockReturnValue([ACCOUNT]);
+  useCategories.mockReturnValue([CATEGORY]);
+  useMerchants.mockReturnValue([MERCHANT]);
+  addTransaction.mockReset().mockResolvedValue("tx1");
   uploadReceipt.mockReset();
   getReceipt.mockReset();
   discardReceipt.mockReset();
+  confirmReceipt.mockReset().mockResolvedValue(READY_RECEIPT);
 });
 
 describe("ReceiptImportDialog", () => {
@@ -66,7 +134,7 @@ describe("ReceiptImportDialog", () => {
     expect(screen.getByLabelText("Elegir foto del recibo")).toBeInTheDocument();
   });
 
-  it("uploads a file and shows the finished draft", async () => {
+  it("uploads a file and shows the editable review form prefilled from the draft", async () => {
     const user = userEvent.setup();
     uploadReceipt.mockResolvedValue({ ...READY_RECEIPT, status: "processing", draft: null });
     getReceipt.mockResolvedValue(READY_RECEIPT);
@@ -74,8 +142,8 @@ describe("ReceiptImportDialog", () => {
     renderWithProviders(<ReceiptImportDialog onClose={vi.fn()} />);
     await user.upload(screen.getByLabelText("Elegir foto del recibo"), makeFile());
 
-    expect(await screen.findByText("Mercadona")).toBeInTheDocument();
-    expect(screen.getByText("12,50 €")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Comercio")).toHaveValue("Mercadona");
+    expect(screen.getByLabelText("Importe")).toHaveValue("12.5");
     expect(getReceipt).toHaveBeenCalledWith("r1");
   });
 
@@ -117,7 +185,7 @@ describe("ReceiptImportDialog", () => {
 
     renderWithProviders(<ReceiptImportDialog onClose={onClose} />);
     await user.upload(screen.getByLabelText("Elegir foto del recibo"), makeFile());
-    await screen.findByText("Mercadona");
+    await screen.findByLabelText("Comercio");
 
     fireEvent.click(screen.getByRole("button", { name: "Descartar" }));
 
@@ -125,5 +193,19 @@ describe("ReceiptImportDialog", () => {
     // argument, hence `expect.anything()` rather than a bare `("r1")`.
     await waitFor(() => expect(discardReceipt).toHaveBeenCalledWith("r1", expect.anything()));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("confirming shows the success step", async () => {
+    const user = userEvent.setup();
+    uploadReceipt.mockResolvedValue({ ...READY_RECEIPT, status: "processing", draft: null });
+    getReceipt.mockResolvedValue(READY_RECEIPT);
+
+    renderWithProviders(<ReceiptImportDialog onClose={vi.fn()} />);
+    await user.upload(screen.getByLabelText("Elegir foto del recibo"), makeFile());
+    await screen.findByLabelText("Comercio");
+
+    await user.click(screen.getByRole("button", { name: /Confirmar/ }));
+
+    expect(await screen.findByText(/Movimiento guardado/)).toBeInTheDocument();
   });
 });

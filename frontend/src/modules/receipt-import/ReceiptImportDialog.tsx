@@ -1,27 +1,25 @@
 /**
- * Scan-receipt dialog: capture -> uploading -> processing -> ready|failed.
+ * Scan-receipt dialog: capture -> uploading -> processing -> ready|failed ->
+ * confirmed.
  *
  * Reuses `ForgotPasswordDialog`'s modal shell and internal state-machine
  * pattern (`identity/ForgotPasswordDialog.tsx`) rather than a new route —
  * this is a dialog over the transactions list, not its own page (see
  * docs/receipt-import/06-frontend-ux-flow.md §2).
  *
- * **Stage 4 scope**: this dialog stops at showing the finished draft — the
- * full editable review form (confidence badges per field, inline
- * merchant/category creation, and the "Confirmar" action that actually
- * writes a Transaction to Dexie) is Stage 5. The "ready" step here is
- * deliberately a read-only summary, not a placeholder to be mistaken for the
- * real thing — see docs/receipt-import/07-implementation-roadmap.md.
+ * The "ready" step renders the real, editable `ReceiptReviewForm` — the AI
+ * pipeline only ever produces a draft here; the form is what actually writes
+ * a Transaction, and only once the user confirms it.
  */
 
 import { AlertTriangle, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ApiError } from "../../shared/api/client";
-import { formatMoney } from "../../shared/format";
 import { type ReceiptImport, isReceiptPending } from "./api";
 import { useDiscardReceipt, useReceiptImport, useUploadReceipt } from "./hooks";
 import { ReceiptDropZone } from "./ReceiptDropZone";
+import { ReceiptReviewForm } from "./ReceiptReviewForm";
 
 function uploadErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.status === 503) {
@@ -33,6 +31,7 @@ function uploadErrorMessage(error: unknown): string {
 
 export function ReceiptImportDialog({ onClose }: { onClose: () => void }) {
   const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const upload = useUploadReceipt();
   const discard = useDiscardReceipt();
   const receiptQuery = useReceiptImport(receiptId);
@@ -86,7 +85,9 @@ export function ReceiptImportDialog({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {!receiptId ? (
+        {confirmed ? (
+          <ConfirmedStep onClose={onClose} />
+        ) : !receiptId ? (
           <CaptureStep uploading={upload.isPending} error={upload.error} onSelect={onFileSelected} />
         ) : receipt && !isReceiptPending(receipt.status) ? (
           receipt.status === "failed" ? (
@@ -95,8 +96,21 @@ export function ReceiptImportDialog({ onClose }: { onClose: () => void }) {
               onRetry={() => setReceiptId(null)}
               onDiscard={discardAndClose}
             />
+          ) : receipt.draft ? (
+            <ReceiptReviewForm
+              receipt={receipt}
+              draft={receipt.draft}
+              onConfirmed={() => setConfirmed(true)}
+              onDiscard={discardAndClose}
+            />
           ) : (
-            <ReadyStep receipt={receipt} onDiscard={discardAndClose} />
+            // Defensive only: the backend never reports "ready" without a
+            // draft attached (see `pipeline.py`) — this is not a real state.
+            <FailedStep
+              receipt={{ ...receipt, errorMessage: "El recibo no tiene datos analizados." }}
+              onRetry={() => setReceiptId(null)}
+              onDiscard={discardAndClose}
+            />
           )
         ) : (
           <ProcessingStep />
@@ -181,53 +195,15 @@ function FailedStep({
   );
 }
 
-function ReadyStep({ receipt, onDiscard }: { receipt: ReceiptImport; onDiscard: () => void }) {
-  const draft = receipt.draft;
-  const amount = typeof draft?.amount.value === "number" ? draft.amount.value : null;
-  const currency = typeof draft?.currency.value === "string" ? draft.currency.value : "EUR";
-
+function ConfirmedStep({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-ink-soft">
-        Esto es lo que Saldo detectó. La revisión completa (edición y confirmación) llega en la
-        siguiente etapa — por ahora puedes descartarlo.
+      <p className="rounded-xl bg-mint-soft px-3 py-2 text-sm font-medium text-mint" role="status">
+        Movimiento guardado. Se sincronizará automáticamente.
       </p>
-
-      {draft && draft.warnings.length > 0 && (
-        <ul className="flex flex-col gap-1 rounded-xl bg-coral-soft px-3 py-2 text-xs text-coral">
-          {draft.warnings.map((w, i) => (
-            <li key={i}>{w}</li>
-          ))}
-        </ul>
-      )}
-
-      <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1.5 text-sm">
-        <dt className="text-ink-soft">Comercio</dt>
-        <dd>{draft?.merchant.rawText || draft?.merchant.suggestedName || "—"}</dd>
-        <dt className="text-ink-soft">Importe</dt>
-        <dd>{amount != null ? formatMoney(amount, currency) : "—"}</dd>
-        <dt className="text-ink-soft">Fecha</dt>
-        <dd>{typeof draft?.date.value === "string" ? draft.date.value : "—"}</dd>
-        <dt className="text-ink-soft">Confianza global</dt>
-        <dd>{draft ? `${Math.round(draft.overallConfidence * 100)}%` : "—"}</dd>
-      </dl>
-
-      <details className="text-xs text-ink-soft">
-        <summary className="cursor-pointer select-none">Ver datos completos</summary>
-        <pre className="mt-2 max-h-48 overflow-auto rounded-xl bg-paper p-3 text-[11px]">
-          {JSON.stringify(draft, null, 2)}
-        </pre>
-      </details>
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          className="rounded-xl border border-line px-4 py-2 text-sm"
-          onClick={onDiscard}
-        >
-          Descartar
-        </button>
-      </div>
+      <button className="btn-primary w-full" type="button" onClick={onClose}>
+        Entendido
+      </button>
     </div>
   );
 }

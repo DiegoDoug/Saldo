@@ -11,7 +11,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { discardReceipt, getReceipt, isReceiptPending, uploadReceipt } from "./api";
+import { confirmReceipt, discardReceipt, getReceipt, isReceiptPending, uploadReceipt } from "./api";
 
 export function useUploadReceipt() {
   return useMutation({ mutationFn: uploadReceipt });
@@ -34,4 +34,11 @@ export function useReceiptImport(receiptId: string | null) {
 
 export function useDiscardReceipt() {
   return useMutation({ mutationFn: discardReceipt });
+}
+
+export function useConfirmReceipt() {
+  return useMutation({
+    mutationFn: ({ id, transactionId }: { id: string; transactionId: string }) =>
+      confirmReceipt(id, transactionId),
+  });
 }

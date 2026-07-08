@@ -185,3 +185,17 @@ export async function getReceipt(id: string): Promise<ReceiptImport> {
 export async function discardReceipt(id: string): Promise<void> {
   await apiRequest<void>(`/receipt-imports/${id}`, { method: "DELETE" });
 }
+
+/**
+ * Records that this receipt produced the given (already Dexie-written)
+ * transaction. Purely metadata/history on the backend — the transaction
+ * itself was already created client-side, offline-first, the same way a
+ * manually entered one is. See `ReceiptReviewForm.tsx`.
+ */
+export async function confirmReceipt(id: string, transactionId: string): Promise<ReceiptImport> {
+  const raw = await apiRequest<RawReceiptImport>(`/receipt-imports/${id}/confirm`, {
+    method: "POST",
+    json: { transaction_id: transactionId },
+  });
+  return toReceiptImport(raw);
+}
