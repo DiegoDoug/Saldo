@@ -4,9 +4,9 @@
  */
 
 import { ArrowLeftRight, Plus, Receipt, Split, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { type LocalTransaction, type TransactionType } from "../../db/db";
+import { type LocalAccount, type LocalTransaction, type TransactionType } from "../../db/db";
 import { formatMoney, parseAmount } from "../../shared/format";
 import { useAccounts } from "../accounts/hooks";
 import { useCategories } from "../budgeting/hooks";
@@ -30,6 +30,7 @@ const SIGN: Record<TransactionType, number> = { income: 1, expense: -1, transfer
 
 export function TransactionsPage() {
   const accounts = useAccounts(true);
+  const activeAccounts = useAccounts();
   const [filters, setFilters] = useState<TransactionFilters>({ sort: "date", order: "desc" });
   const transactions = useTransactions(filters);
   const [adding, setAdding] = useState(false);
@@ -105,7 +106,9 @@ export function TransactionsPage() {
         </div>
       )}
 
-      {adding && <AddTransactionForm onDone={() => setAdding(false)} />}
+      {adding && (
+        <AddTransactionForm accounts={activeAccounts} onDone={() => setAdding(false)} />
+      )}
 
       {accounts.length === 0 ? (
         <EmptyState
@@ -207,8 +210,13 @@ interface SplitLine {
   amount: string;
 }
 
-function AddTransactionForm({ onDone }: { onDone: () => void }) {
-  const accounts = useAccounts();
+function AddTransactionForm({
+  accounts,
+  onDone,
+}: {
+  accounts: LocalAccount[];
+  onDone: () => void;
+}) {
   const categories = useCategories();
   const merchants = useMerchants();
   const [type, setType] = useState<TransactionType>("expense");
@@ -222,6 +230,15 @@ function AddTransactionForm({ onDone }: { onDone: () => void }) {
   const [split, setSplit] = useState(false);
   const [lines, setLines] = useState<SplitLine[]>([{ categoryId: "", amount: "" }]);
   const [tags, setTags] = useState<string[]>([]);
+
+  // `accounts` can still be empty on this form's first render (the Dexie live
+  // query resolves asynchronously), so the `useState` initializers above may
+  // have locked onto "". Adopt the first account once real data arrives.
+  useEffect(() => {
+    if (accounts.length > 0 && !accounts.some((a) => a.id === accountId)) {
+      setAccountId(accounts[0].id);
+    }
+  }, [accounts, accountId]);
 
   const account = accounts.find((a) => a.id === accountId);
   const total = parseAmount(amount);
