@@ -22,7 +22,14 @@ import { C, CATEGORY_COLORS, MONTHS } from "../../shared/theme";
 import { MoneyInput } from "../../shared/ui/MoneyInput";
 import { BudgetVsActual } from "./BudgetVsActual";
 import { CategoryRow } from "./CategoryRow";
-import { amountByCategory, useCategories, useMonthResult } from "./hooks";
+import {
+  amountByCategory,
+  buildCategoryForest,
+  rollupAmount,
+  useCategories,
+  useMonthResult,
+  type CategoryNode,
+} from "./hooks";
 import { addCategory, setGoal } from "./localRepo";
 import { useBudgetingUi } from "./uiStore";
 
@@ -38,7 +45,15 @@ export function MonthView() {
   const amounts = amountByCategory(entries);
   const goal = entries.find((e) => e.deleted === 0 && e.kind === "goal")?.amount ?? 0;
 
-  const income = categories.filter((c) => c.kind === "income");
+  // Roots only; each node carries its nested subcategories for recursive rendering.
+  const forest = buildCategoryForest(categories);
+  const incomeRoots = forest.filter((c) => c.kind === "income");
+  const fixedRoots = forest.filter((c) => c.kind === "fixed");
+  const variableRoots = forest.filter((c) => c.kind === "variable");
+  const renderSection = (nodes: CategoryNode[], accentClassName: string) =>
+    renderCategoryNodes({ nodes, amounts, year, month: monthIdx, currency, accentClassName });
+
+  // Flat, for the breakdown pie only — every category (root or sub) with its own direct spend.
   const fixed = categories.filter((c) => c.kind === "fixed");
   const variable = categories.filter((c) => c.kind === "variable");
 
@@ -135,17 +150,7 @@ export function MonthView() {
 
       {/* Income */}
       <Section title="Ingresos" icon={<Wallet size={15} />} accent={C.mint} total={result.incomeTotal}>
-        {income.map((c) => (
-          <CategoryRow
-            key={c.id}
-            category={c}
-            amount={amounts.get(c.id) ?? 0}
-            year={year}
-            month={monthIdx}
-            currency={currency}
-            accentClassName="text-mint"
-          />
-        ))}
+        {renderSection(incomeRoots, "text-mint")}
         <AddButton label="Añadir ingreso" onClick={() => void addCategory("Nuevo ingreso", "income")} />
       </Section>
 
@@ -179,17 +184,7 @@ export function MonthView() {
         accent={C.blue}
         total={result.fixedTotal}
       >
-        {fixed.map((c) => (
-          <CategoryRow
-            key={c.id}
-            category={c}
-            amount={amounts.get(c.id) ?? 0}
-            year={year}
-            month={monthIdx}
-            currency={currency}
-            accentClassName="text-coral"
-          />
-        ))}
+        {renderSection(fixedRoots, "text-coral")}
         <AddButton label="Añadir gasto fijo" onClick={() => void addCategory("Nuevo gasto", "fixed")} />
       </Section>
 
@@ -200,17 +195,7 @@ export function MonthView() {
         accent={C.lilac}
         total={result.variableTotal}
       >
-        {variable.map((c) => (
-          <CategoryRow
-            key={c.id}
-            category={c}
-            amount={amounts.get(c.id) ?? 0}
-            year={year}
-            month={monthIdx}
-            currency={currency}
-            accentClassName="text-coral"
-          />
-        ))}
+        {renderSection(variableRoots, "text-coral")}
         <AddButton
           label="Añadir gasto variable"
           onClick={() => void addCategory("Nuevo gasto", "variable")}
@@ -247,6 +232,47 @@ export function MonthView() {
       )}
     </div>
   );
+}
+
+/**
+ * Render a forest of category nodes as indented `CategoryRow`s. A node with
+ * subcategories shows a read-only rollup (its own amount plus every
+ * descendant's) instead of an editable entry — budgeting happens at the leaves.
+ */
+function renderCategoryNodes({
+  nodes,
+  amounts,
+  year,
+  month,
+  currency,
+  accentClassName,
+  depth = 0,
+}: {
+  nodes: CategoryNode[];
+  amounts: Map<string, number>;
+  year: number;
+  month: number;
+  currency: string;
+  accentClassName?: string;
+  depth?: number;
+}): ReactNode[] {
+  return nodes.flatMap((node) => {
+    const hasChildren = node.children.length > 0;
+    return [
+      <CategoryRow
+        key={node.id}
+        category={node}
+        amount={hasChildren ? rollupAmount(node, amounts) : (amounts.get(node.id) ?? 0)}
+        readOnly={hasChildren}
+        depth={depth}
+        year={year}
+        month={month}
+        currency={currency}
+        accentClassName={accentClassName}
+      />,
+      ...renderCategoryNodes({ nodes: node.children, amounts, year, month, currency, accentClassName, depth: depth + 1 }),
+    ];
+  });
 }
 
 function IconButton({

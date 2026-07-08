@@ -38,7 +38,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { C, CATEGORY_COLORS } from "../../shared/theme";
+import { C, CATEGORY_COLORS, CATEGORY_INDENT_PX } from "../../shared/theme";
 import { CATEGORY_ICON_NAMES, categoryIcon } from "./categoryIcons";
 import { type CategoryNode, useCategoryTree } from "./hooks";
 import {
@@ -147,7 +147,7 @@ function SortableCategoryRow({ node, depth }: { node: CategoryNode; depth: numbe
     >
       <div
         className="flex items-center gap-1.5 border-t border-line py-2.5 first:border-t-0"
-        style={{ paddingLeft: depth * 18 }}
+        style={{ paddingLeft: depth * CATEGORY_INDENT_PX }}
       >
         <button
           aria-label="Reordenar"
@@ -204,7 +204,11 @@ function SortableCategoryRow({ node, depth }: { node: CategoryNode; depth: numbe
       </div>
 
       {picking && (
-        <StylePicker node={node} onClose={() => setPicking(false)} style={{ marginLeft: depth * 18 }} />
+        <StylePicker
+          node={node}
+          onClose={() => setPicking(false)}
+          style={{ marginLeft: depth * CATEGORY_INDENT_PX }}
+        />
       )}
 
       {expanded && hasChildren && <SortableGroup items={node.children} depth={depth + 1} />}
