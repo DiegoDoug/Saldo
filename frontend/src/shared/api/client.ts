@@ -31,10 +31,38 @@ interface RequestOptions {
   form?: Record<string, string>;
   headers?: Record<string, string>;
   auth?: boolean; // attach the JWT (default true)
+  /**
+   * Explicit token to attach instead of the auth store's. Used only by the
+   * login flow, which fetches the profile before committing the token to
+   * the store (see identity/hooks.ts) -- `auth` still governs whether this
+   * is treated as an authenticated request (e.g. for 401 handling).
+   */
+  token?: string;
+}
+
+/**
+ * The token we sent was rejected (expired, or the account no longer exists)
+ * -- drop the session so ProtectedRoute bounces to /login instead of leaving
+ * the UI stuck showing stale, unsyncable data. Guarded so a burst of
+ * parallel 401s (several in-flight queries sharing one stale token) only
+ * touches the store once.
+ */
+function handleUnauthorized(): void {
+  if (useAuthStore.getState().token) {
+    useAuthStore.getState().expireSession();
+  }
+}
+
+function errorDetail(parsed: unknown, fallback: string): string {
+  return (
+    (parsed && typeof parsed === "object" && "detail" in parsed
+      ? String((parsed as { detail: unknown }).detail)
+      : fallback) || "Request failed"
+  );
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", json, form, headers = {}, auth = true } = options;
+  const { method = "GET", json, form, headers = {}, auth = true, token: explicitToken } = options;
 
   const finalHeaders: Record<string, string> = { ...headers };
   let body: BodyInit | undefined;
@@ -48,7 +76,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (auth) {
-    const token = useAuthStore.getState().token;
+    const token = explicitToken ?? useAuthStore.getState().token;
     if (token) finalHeaders["Authorization"] = `Bearer ${token}`;
   }
 
@@ -58,11 +86,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const parsed = text ? safeJson(text) : null;
 
   if (!resp.ok) {
-    const detail =
-      (parsed && typeof parsed === "object" && "detail" in parsed
-        ? String((parsed as { detail: unknown }).detail)
-        : resp.statusText) || "Request failed";
-    throw new ApiError(resp.status, parsed, detail);
+    if (resp.status === 401 && auth) handleUnauthorized();
+    throw new ApiError(resp.status, parsed, errorDetail(parsed, resp.statusText));
   }
 
   return parsed as T;
@@ -97,11 +122,8 @@ export async function apiUploadRequest<T>(path: string, file: File): Promise<T> 
   const parsed = text ? safeJson(text) : null;
 
   if (!resp.ok) {
-    const detail =
-      (parsed && typeof parsed === "object" && "detail" in parsed
-        ? String((parsed as { detail: unknown }).detail)
-        : resp.statusText) || "Request failed";
-    throw new ApiError(resp.status, parsed, detail);
+    if (resp.status === 401) handleUnauthorized();
+    throw new ApiError(resp.status, parsed, errorDetail(parsed, resp.statusText));
   }
 
   return parsed as T;

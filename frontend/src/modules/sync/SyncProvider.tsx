@@ -16,6 +16,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
+    // Relies on callers never setting `token` in the auth store until any
+    // local-data wipe for an account switch has finished (see
+    // identity/hooks.ts's loginAndLoadProfile) -- this effect starts syncing
+    // the instant `token` changes, with no re-check of its own.
     if (!token) return;
     void bootstrap().then(() => runLayoutSync());
 

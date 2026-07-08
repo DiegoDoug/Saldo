@@ -6,6 +6,8 @@
 
 import { useMutation } from "@tanstack/react-query";
 
+import { adoptLocalProfile } from "../../db/resetLocalData";
+import { queryClient } from "../../shared/queryClient";
 import { fetchMe, forgotPassword, login, register, resetPassword } from "./api";
 import { useAuthStore } from "./authStore";
 
@@ -26,17 +28,18 @@ export class PostRegisterLoginError extends Error {
   }
 }
 
-/** Log in, then fetch the profile — token is stored before /users/me is called. */
+/**
+ * Log in, then fetch the profile and commit the session in one shot.
+ * Deliberately keeps the token out of the auth store until this account's
+ * local data has been adopted (Dexie wiped first if it belonged to a
+ * different account) -- `SyncProvider` starts syncing the moment the store's
+ * token changes, and it must never race a wipe that's still in flight.
+ */
 async function loginAndLoadProfile({ email, password }: Credentials): Promise<void> {
   const token = await login(email, password);
-  useAuthStore.getState().setToken(token);
-  try {
-    const user = await fetchMe();
-    useAuthStore.getState().setUser(user);
-  } catch (err) {
-    useAuthStore.getState().clear();
-    throw err;
-  }
+  const user = await fetchMe(token);
+  await adoptLocalProfile(user);
+  useAuthStore.getState().setSession(token, user);
 }
 
 export function useLogin() {
@@ -74,5 +77,8 @@ export function useResetPassword() {
 }
 
 export function useLogout() {
-  return () => useAuthStore.getState().clear();
+  return () => {
+    useAuthStore.getState().clear();
+    queryClient.clear();
+  };
 }

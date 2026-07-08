@@ -43,4 +43,33 @@ describe("authStore", () => {
     expect(useAuthStore.getState().token).toBeNull();
     expect(useAuthStore.getState().isAuthenticated()).toBe(false);
   });
+
+  it("expireSession drops the session and flags it as expired", () => {
+    useAuthStore.getState().setSession("jwt-token", {
+      id: "u1",
+      email: "ana@example.com",
+      defaultCurrency: "EUR",
+    });
+    useAuthStore.getState().expireSession();
+    expect(useAuthStore.getState().token).toBeNull();
+    expect(useAuthStore.getState().user).toBeNull();
+    expect(useAuthStore.getState().sessionExpired).toBe(true);
+  });
+
+  it("setSession clears a stale sessionExpired flag on a fresh login", () => {
+    useAuthStore.getState().expireSession();
+    expect(useAuthStore.getState().sessionExpired).toBe(true);
+    useAuthStore.getState().setSession("jwt-token", {
+      id: "u1",
+      email: "ana@example.com",
+      defaultCurrency: "EUR",
+    });
+    expect(useAuthStore.getState().sessionExpired).toBe(false);
+  });
+
+  it("does not persist the transient sessionExpired flag", () => {
+    useAuthStore.getState().expireSession();
+    const persisted = JSON.parse(localStorage.getItem("saldo-auth") ?? "{}");
+    expect(persisted.state).not.toHaveProperty("sessionExpired");
+  });
 });
