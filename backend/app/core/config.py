@@ -46,6 +46,31 @@ class Settings(BaseSettings):
         """True when a Resend API key is configured; else emails are logged."""
         return bool(self.resend_api_key.strip())
 
+    # --- Receipt import (AI receipt-to-transaction pipeline) ------------
+    # Images are stored content-addressed on local disk; the drafts they
+    # produce are server-only state, never synced to Dexie (see
+    # docs/receipt-import/04-database-changes.md).
+    receipt_storage_dir: str = "./data/receipts"
+    receipt_max_upload_mb: int = 10
+
+    # Tesseract language packs to run, "+"-joined (see Dockerfile). Spanish +
+    # English cover this app's primary audience by default.
+    ocr_languages: str = "spa+eng"
+
+    # DeepSeek does the structured extraction (docs/receipt-import/05-ai-integration-design.md).
+    # Leaving `deepseek_api_key` blank disables the whole feature — the upload
+    # endpoint returns 503 rather than degrading silently — same "off by
+    # default, no data leaves the host unless configured" posture as
+    # `resend_api_key`, and consistent with this project's own stated stance
+    # on optional LLM features (docs/transformation/05-technical-roadmap.md).
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-chat"
+    deepseek_base_url: str = "https://api.deepseek.com"
+
+    @property
+    def deepseek_enabled(self) -> bool:
+        return bool(self.deepseek_api_key.strip())
+
     # --- CORS -----------------------------------------------------------
     # Comma-separated in the environment (SALDO_CORS_ORIGINS); exposed as a
     # parsed list via `cors_origins_list`.

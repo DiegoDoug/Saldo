@@ -18,5 +18,13 @@ argon2-cffi==23.1.0
 # Async SQLite driver (fastapi-users is async)
 aiosqlite==0.20.0
 
-# HTTP client for Frankfurter FX rates (Stage 5) and Resend password-reset email
+# HTTP client for Frankfurter FX rates (Stage 5), Resend password-reset email,
+# and the DeepSeek receipt-extraction API (receipt_import)
 httpx==0.28.1
+
+# Receipt import: OCR (pytesseract wraps the `tesseract-ocr` system binary —
+# see Dockerfile / README's local-dev prerequisites, it isn't pip-installable)
+pytesseract==0.3.13
+pillow==11.1.0
+# Receipt import: fuzzy merchant/category name matching
+rapidfuzz==3.11.0

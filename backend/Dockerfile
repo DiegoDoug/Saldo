@@ -9,6 +9,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Tesseract does the OCR step of the receipt-import pipeline (pytesseract is
+# just a thin wrapper over this binary, not the OCR engine itself). Spanish +
+# English language data cover this app's primary audience; add more
+# `tesseract-ocr-<lang>` packages here if you fork for another locale.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y tesseract-ocr tesseract-ocr-spa \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies first so this layer is cached across code changes.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

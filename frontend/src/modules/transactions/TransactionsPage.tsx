@@ -3,7 +3,7 @@
  * add form (income / expense / transfer). Reads live from Dexie (offline-first).
  */
 
-import { ArrowLeftRight, Plus, Receipt, Split, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Camera, Plus, Receipt, Split, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { type LocalAccount, type LocalTransaction, type TransactionType } from "../../db/db";
@@ -16,6 +16,8 @@ import { ensureTags } from "../tags/localRepo";
 import { tagColor } from "../tags/tagColor";
 import { TagInput } from "../tags/TagInput";
 import { EmptyState } from "../../shared/ui/EmptyState";
+import { ReceiptImportDialog } from "../receipt-import/ReceiptImportDialog";
+import { useOnline } from "../receipt-import/useOnline";
 import { useTransactions, type TransactionFilters } from "./hooks";
 import {
   addSplit,
@@ -34,6 +36,8 @@ export function TransactionsPage() {
   const [filters, setFilters] = useState<TransactionFilters>({ sort: "date", order: "desc" });
   const transactions = useTransactions(filters);
   const [adding, setAdding] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const online = useOnline();
   const tagColors = useTagColors();
   const usedTags = useUsedTagNames();
 
@@ -47,16 +51,28 @@ export function TransactionsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-2">
         <h1 className="font-display text-2xl font-semibold">Movimientos</h1>
-        <button
-          className="flex items-center gap-1 rounded-xl bg-mint px-3 py-2 text-sm font-semibold text-white"
-          onClick={() => setAdding((v) => !v)}
-          disabled={accounts.length === 0}
-        >
-          <Plus size={16} /> Nuevo
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-1 rounded-xl border border-line px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40"
+            onClick={() => setScanning(true)}
+            disabled={accounts.length === 0 || !online}
+            title={!online ? "Requiere conexión" : undefined}
+          >
+            <Camera size={16} /> Escanear recibo
+          </button>
+          <button
+            className="flex items-center gap-1 rounded-xl bg-mint px-3 py-2 text-sm font-semibold text-white"
+            onClick={() => setAdding((v) => !v)}
+            disabled={accounts.length === 0}
+          >
+            <Plus size={16} /> Nuevo
+          </button>
+        </div>
       </header>
+
+      {scanning && <ReceiptImportDialog onClose={() => setScanning(false)} />}
 
       <div className="flex flex-wrap gap-2">
         <input

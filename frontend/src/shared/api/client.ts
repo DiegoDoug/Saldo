@@ -75,3 +75,34 @@ function safeJson(text: string): unknown {
     return text;
   }
 }
+
+/**
+ * Multipart upload variant of `apiRequest`, for endpoints that take a file
+ * (currently just receipt-import). Kept separate rather than folding into
+ * `RequestOptions`: `apiRequest` always sets `Content-Type` itself, but a
+ * `FormData` body needs the browser to set it (with the multipart boundary),
+ * so this deliberately never touches that header.
+ */
+export async function apiUploadRequest<T>(path: string, file: File): Promise<T> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const headers: Record<string, string> = {};
+  const token = useAuthStore.getState().token;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const resp = await fetch(`${BASE_URL}${path}`, { method: "POST", headers, body: formData });
+
+  const text = await resp.text();
+  const parsed = text ? safeJson(text) : null;
+
+  if (!resp.ok) {
+    const detail =
+      (parsed && typeof parsed === "object" && "detail" in parsed
+        ? String((parsed as { detail: unknown }).detail)
+        : resp.statusText) || "Request failed";
+    throw new ApiError(resp.status, parsed, detail);
+  }
+
+  return parsed as T;
+}

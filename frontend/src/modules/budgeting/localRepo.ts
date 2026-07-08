@@ -63,9 +63,10 @@ export async function addCategory(
   name: string,
   kind: Kind,
   parentId: string | null = null,
-): Promise<void> {
+): Promise<string> {
+  const id = newId();
   await db.categories.put({
-    id: newId(),
+    id,
     name,
     kind,
     position: await nextPositionUnder(parentId),
@@ -75,6 +76,7 @@ export async function addCategory(
     updatedAt: nowIso(),
     deleted: 0,
   });
+  return id;
 }
 
 /** Add a subcategory that inherits its parent's kind (matching the backend rule). */
