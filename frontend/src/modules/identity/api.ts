@@ -4,7 +4,6 @@
  */
 
 import { apiRequest } from "../../shared/api/client";
-import { db } from "../../db/db";
 import type { SessionUser } from "./authStore";
 
 interface UserResponse {
@@ -62,15 +61,12 @@ export async function resetPassword(token: string, password: string): Promise<vo
   });
 }
 
-/** Fetch the current user (requires a valid token in the auth store). */
-export async function fetchMe(): Promise<SessionUser> {
-  const user = await apiRequest<UserResponse>("/users/me");
-  const session = toSessionUser(user);
-  // Mirror the profile into Dexie so the app has the User shape offline.
-  await db.profile.put({
-    id: session.id,
-    email: session.email,
-    defaultCurrency: session.defaultCurrency,
-  });
-  return session;
+/**
+ * Fetch the current user. During login/register `token` is passed explicitly
+ * because the caller deliberately hasn't committed it to the auth store yet
+ * (see `hooks.ts`); otherwise it's read from the store as usual.
+ */
+export async function fetchMe(token?: string): Promise<SessionUser> {
+  const user = await apiRequest<UserResponse>("/users/me", token ? { token } : {});
+  return toSessionUser(user);
 }

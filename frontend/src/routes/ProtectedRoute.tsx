@@ -7,8 +7,9 @@ import { useAuthStore } from "../modules/identity/authStore";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const token = useAuthStore((s) => s.token);
+  const sessionExpired = useAuthStore((s) => s.sessionExpired);
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ sessionExpired }} replace />;
   }
   return <>{children}</>;
 }
