@@ -107,6 +107,11 @@ def create_app() -> FastAPI:
 
     app.include_router(layout_router)
 
+    # --- Receipt import (AI receipt-to-transaction pipeline) ------------
+    from app.modules.receipt_import.router import router as receipt_import_router
+
+    app.include_router(receipt_import_router)
+
     return app
 
 

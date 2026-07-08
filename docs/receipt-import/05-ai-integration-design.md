@@ -1,6 +1,6 @@
 # Receipt Import — Document 5: AI Integration Design
 
-**Status:** Complete — builds on Document 4. **Contains one open decision for sign-off before implementation (§3).**
+**Status:** Complete — builds on Document 4. OCR default decided (§3): Tesseract.
 
 ---
 
@@ -70,7 +70,7 @@ def deepseek_enabled(self) -> bool:
 
 If `deepseek_enabled` is `False`, `POST /receipt-imports` returns `503` with a clear message, and the frontend hides the "Escanear recibo" entry point entirely (surfaced via the existing pattern of feature-flag-by-config, checked once at app load — no new "feature flags" system needed for one flag). This is not optional polish: `docs/transformation/05-technical-roadmap.md:78` already commits this project to LLM features being "off by default; no data leaves the host unless the user points it somewhere." Shipping this feature pre-configured-off by default is how the brief's explicit DeepSeek requirement and the project's own privacy stance both hold at once — a self-hoster who never sets `SALDO_DEEPSEEK_API_KEY` runs an app that never makes an external AI call, full stop.
 
-## 3. Provider abstraction — OCR, and the one open decision
+## 3. Provider abstraction — OCR (decided: Tesseract)
 
 `backend/app/modules/receipt_import/ocr/base.py`:
 
@@ -81,18 +81,18 @@ class OcrProvider(Protocol):
 
 (`Sequence[bytes]`, not a single image, from day one — Document 2 §7's multi-page hook, at zero extra cost now.)
 
-DeepSeek's chat models are text-only, so a real OCR step is not a design nicety here — without it there is no text to send the LLM. Two real candidates, genuinely in tension with each other:
+DeepSeek's chat models are text-only, so a real OCR step is not a design nicety here — without it there is no text to send the LLM. The two real candidates were local Tesseract (free, no key, works fully offline, weaker on crumpled thermal-paper photos) versus a cloud OCR API (better raw accuracy, a second external dependency and recurring cost on top of DeepSeek). **Decision: `TesseractOcrProvider` is the v1 implementation and the default**, prioritizing the self-hosted/zero-external-dependency posture the rest of this design (§2) already commits to for DeepSeek itself — a self-hoster who configures nothing beyond `SALDO_DEEPSEEK_API_KEY` should not also need a second cloud account just to get OCR. `OcrProvider`'s interface is unaffected by this choice: a cloud provider (Google Vision, Azure Document Intelligence) remains a drop-in follow-up (`SALDO_OCR_PROVIDER=google_vision`) if extraction quality on real-world receipts turns out to need it — nothing above this file's boundary changes when that happens.
 
-| | Local (Tesseract via `pytesseract`) | Cloud (Google Cloud Vision `DOCUMENT_TEXT_DETECTION`) |
-|---|---|---|
-| Receipt quality | Mediocre on crumpled thermal paper / small fonts — the actual failure mode this feature exists to handle well | Materially better on low-quality photos; this is what "best receipt extraction quality" in the brief points to |
-| Cost / keys | Free, no API key, works fully offline | Per-image cost (small, but nonzero), needs `SALDO_GOOGLE_VISION_API_KEY` |
-| Fits self-hosted/Pi philosophy | Yes — no second external dependency once DeepSeek is already an accepted exception | No — a second cloud call for every receipt, on top of DeepSeek |
-| Implementation cost behind the interface | Same either way — one file, ~40 lines |
+`ocr/dependency.py` mirrors `ai/dependency.py`'s `get_*_provider()` shape:
 
-**Recommendation:** ship `GoogleVisionOcrProvider` as the default v1 implementation, since the brief explicitly asks for the best-quality provider and OCR fidelity is the ceiling on everything downstream (a bad OCR pass no prompt engineering can fully recover from). Gate it the same way as DeepSeek (`SALDO_GOOGLE_VISION_API_KEY`, empty ⇒ feature disabled) so it fails the same closed-by-default way. Implement `TesseractOcrProvider` in the same PR as a documented, selectable (`SALDO_OCR_PROVIDER=tesseract`) zero-cost/zero-external-dependency alternative for self-hosters who'd rather accept lower accuracy than a second cloud API — this costs one extra small file and directly serves the fork-friendly promise in `CLAUDE.md`, but is not the default.
-
-This is the one place in this design series where I'm flagging a call rather than making it unilaterally: it trades off accuracy against the project's stated preference for minimizing external dependencies, and reasonable people could default the other way. **Please confirm the default (Google Vision) before Document 7's roadmap is executed** — swapping the default later is a one-line config change, not a rework, but I'd rather ask than assume on a decision with real recurring cost implications for self-hosters.
+```python
+def get_ocr_provider(settings: Settings = Depends(get_settings)) -> OcrProvider:
+    match settings.ocr_provider:  # SALDO_OCR_PROVIDER, default "tesseract"
+        case "tesseract":
+            return TesseractOcrProvider()
+        case other:
+            raise ValueError(f"Unknown OCR provider: {other}")
+```
 
 ## 4. Prompt design (Phase 8)
 

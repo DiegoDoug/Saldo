@@ -2,24 +2,21 @@
 
 **Status:** Complete — final document of the series. **Implementation does not start until this is approved**, per the brief's explicit instruction, and each stage below is executed one at a time with a pause for review after each, not batched.
 
----
-
-## Open decision needing sign-off before Stage 1
-
-**OCR provider default** (Document 5 §3): recommendation is Google Cloud Vision as the default (best receipt-photo accuracy, matching the brief's stated priority), with Tesseract shipped in the same PR as a selectable zero-cost/zero-external-dependency alternative (`SALDO_OCR_PROVIDER=tesseract`) for self-hosters who'd rather not add a second cloud dependency alongside DeepSeek. If you'd rather default to Tesseract-only for v1 and add Google Vision later, say so — it changes one config default and one line in Stage 2, not the architecture.
-
-Everything else in Documents 1–6 is a direct, low-ambiguity consequence of the existing codebase's own conventions and is ready to build as specified.
+**OCR default decided:** Tesseract (Document 5 §3) — no external dependency beyond DeepSeek itself, in keeping with the self-hosted-by-default posture the rest of the design already commits to. `OcrProvider`'s interface stays swappable if a cloud provider is ever wanted later.
 
 ## Stages
 
 Each stage is one PR, ships a runnable app, and pauses for approval before the next begins — following this repo's own stated working discipline (`docs/transformation/06-implementation-master-plan.md`'s "one stage = one PR = a runnable, green app").
 
-### Stage 1 — Backend skeleton, no AI yet
-`receipt_import` module scaffolded: `models.py` + migration + `core/metadata.py` registration, `storage.py` (content-addressed disk storage, `SALDO_RECEIPT_STORAGE_DIR`), `schemas.py`, and a `router.py` with upload/get/list/delete/image endpoints wired to a **stub pipeline** that just marks status `ready` with a hand-built fixed `DraftReceiptAnalysis` (no real OCR/AI calls). Config additions (`SALDO_RECEIPT_MAX_UPLOAD_MB`, storage dir). Full pytest coverage of upload validation, ownership scoping, content-hash dedup, and the confirm/discard state transitions — all of this is independently correct and testable before any external API is involved.
+### Stage 1 — Backend skeleton, no AI yet ✅ done
+`receipt_import` module scaffolded: `models.py` + migration + `core/metadata.py` registration, `storage.py` (content-addressed disk storage, `SALDO_RECEIPT_STORAGE_DIR`), `schemas.py`, and a `router.py` with upload/get/list/draft-patch/confirm/discard/image endpoints wired to a **stub pipeline** that runs inline and marks status `ready` with a hand-built fixed `DraftReceiptAnalysis` (no real OCR/AI calls, no `BackgroundTasks` yet — both land in Stage 2 once there's real latency to hide). Config additions: `SALDO_RECEIPT_STORAGE_DIR`, `SALDO_RECEIPT_MAX_UPLOAD_MB`, `SALDO_DEEPSEEK_API_KEY`/`_MODEL`/`_BASE_URL` (unused by the stub, wired now so the 503-when-unconfigured gate is real from day one). 9 new pytest cases covering upload validation (content-type/size), ownership scoping, content-hash dedup, the draft-patch/confirm/discard state machine (including the 409s for editing/confirming a non-`ready` receipt), and the disabled-feature 503. Full existing suite (85 tests) + `ruff check .` stay green.
 **Why first:** de-risks the genuinely novel part of this feature (file upload, storage, a new table) independently of the AI integration, which is the part most likely to need iteration once tested against real receipts.
+**Found and fixed during implementation:** the image-download endpoint would have thrown an unhandled `FileNotFoundError` (→ 500) for a discarded receipt, since `discard_receipt` deletes the on-disk file but keeps the row; it now returns a clean 404 instead.
+**Trade-off:** the DeepSeek config fields exist a stage early, purely to make the 503 gate testable now instead of retrofitting it in Stage 2.
+**Risk carried forward:** none new — this stage touches no existing table or router logic, only adds one net-new table and one net-new router.
 
 ### Stage 2 — OCR + DeepSeek pipeline
-`ocr/` and `ai/` provider abstractions, `GoogleVisionOcrProvider` + `TesseractOcrProvider` (per the decision above), `DeepSeekProvider`, `extraction_service.py`, `draft_builder.py`, real `pipeline.py` replacing the Stage 1 stub. `BackgroundTasks` wiring. Prompt templates in `ai/prompts.py`, iterated against a small fixture set of real (or realistic sample) receipt OCR text saved as test fixtures, so prompt changes have a regression test rather than being tuned by hand each time. Feature-flagged off by default (`deepseek_enabled`/`ocr` key checks) so this merges safely even before real API keys exist anywhere.
+`ocr/` and `ai/` provider abstractions, `TesseractOcrProvider` (the decided default) + `DeepSeekProvider`, `extraction_service.py`, `draft_builder.py`, real `pipeline.py` replacing the Stage 1 stub. `BackgroundTasks` wiring. Prompt templates in `ai/prompts.py`, iterated against a small fixture set of real (or realistic sample) receipt OCR text saved as test fixtures, so prompt changes have a regression test rather than being tuned by hand each time. Feature-flagged off by default (`deepseek_enabled`/`ocr` key checks) so this merges safely even before real API keys exist anywhere.
 **Why second:** depends on Stage 1's storage/table; is the highest-uncertainty stage (prompt quality against real receipts), so it's isolated rather than bundled with matching logic.
 
 ### Stage 3 — Merchant & category matching
