@@ -91,12 +91,15 @@ async def test_finance_push_is_user_scoped(client: AsyncClient) -> None:
         json={"accounts": [account_payload(aid, "Ana Checking", "2026-01-01T10:00:00")]},
         headers=ana,
     )
-    # Bob pushing the same account id is refused.
+    # Bob pushing the same account id is skipped and reported, never applied.
     resp = await client.post(
         "/sync/push",
         json={"accounts": [account_payload(aid, "Hijack", "2026-01-02T10:00:00")]},
         headers=bob,
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["rejected_ids"] == [aid]
+    assert body["accounts"] == []
     # Ana's account is unchanged.
     assert (await client.get(f"/accounts/{aid}", headers=ana)).json()["name"] == "Ana Checking"

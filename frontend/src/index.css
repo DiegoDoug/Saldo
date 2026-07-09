@@ -5,30 +5,71 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  /* ------------------------------------------------------------------
+   * Themes. Each theme assigns the palette tokens tailwind.config.js maps
+   * to named colors (bg-paper, text-ink, ...). Values are space-separated
+   * RGB triplets so Tailwind opacity modifiers (bg-card/95) keep working.
+   *
+   *   claro  — the original light "Cuaderno" look (default)
+   *   medio  — a warm, dimmed kraft-paper look, halfway to dark
+   *   oscuro — full dark, built on the ink green
+   * ------------------------------------------------------------------ */
+  :root,
+  [data-theme="claro"] {
     color-scheme: light;
+    --c-paper: 251 247 240; /* #FBF7F0 */
+    --c-card: 255 255 255; /* #FFFFFF */
+    --c-ink: 28 40 38; /* #1C2826 */
+    --c-ink-soft: 92 106 102; /* #5C6A66 */
+    --c-line: 231 224 212; /* #E7E0D4 */
+    --c-mint: 47 143 111; /* #2F8F6F */
+    --c-mint-soft: 228 242 235; /* #E4F2EB */
+    --c-coral: 224 107 82; /* #E06B52 */
+    --c-coral-soft: 251 231 225; /* #FBE7E1 */
+    --c-gold: 201 162 39; /* #C9A227 */
+    --c-blue: 62 110 142; /* #3E6E8E */
+    --c-lilac: 124 108 168; /* #7C6CA8 */
+  }
+
+  [data-theme="medio"] {
+    color-scheme: light;
+    --c-paper: 226 218 200; /* #E2DAC8 */
+    --c-card: 240 234 220; /* #F0EADC */
+    --c-ink: 38 51 47; /* #26332F */
+    --c-ink-soft: 90 103 99; /* #5A6763 */
+    --c-line: 202 191 166; /* #CABFA6 */
+    --c-mint: 40 125 97; /* #287D61 */
+    --c-mint-soft: 209 227 216; /* #D1E3D8 */
+    --c-coral: 202 88 64; /* #CA5840 */
+    --c-coral-soft: 236 213 203; /* #ECD5CB */
+    --c-gold: 169 136 30; /* #A9881E */
+    --c-blue: 56 99 127; /* #38637F */
+    --c-lilac: 108 93 148; /* #6C5D94 */
+  }
+
+  [data-theme="oscuro"] {
+    color-scheme: dark;
+    --c-paper: 21 32 29; /* #15201D */
+    --c-card: 32 47 43; /* #202F2B */
+    --c-ink: 230 239 235; /* #E6EFEB */
+    --c-ink-soft: 148 167 161; /* #94A7A1 */
+    --c-line: 52 70 64; /* #344640 */
+    --c-mint: 61 164 128; /* #3DA480 — mid-tone: readable as text on dark paper,
+                             still works under the app's white-on-mint buttons */
+    --c-mint-soft: 37 71 59; /* #25473B */
+    --c-coral: 240 138 114; /* #F08A72 */
+    --c-coral-soft: 74 45 36; /* #4A2D24 */
+    --c-gold: 224 190 85; /* #E0BE55 */
+    --c-blue: 122 171 201; /* #7AABC9 */
+    --c-lilac: 168 152 212; /* #A898D4 */
   }
 
   body {
     @apply bg-paper text-ink font-sans;
-    /* The "Cuaderno" dotted-paper backdrop from the prototype. */
-    background-image: radial-gradient(#e7e0d4 0.5px, transparent 0.5px);
+    /* The "Cuaderno" dotted-paper backdrop from the prototype. The dots use
+     * the theme's line color, so every theme keeps its own paper texture. */
+    background-image: radial-gradient(rgb(var(--c-line)) 0.5px, transparent 0.5px);
     background-size: 22px 22px;
-  }
-
-  /* Per-user themes (selected on the dashboard, applied via data-theme). */
-  [data-theme="liso"] body {
-    background-image: none;
-  }
-
-  [data-theme="carbon"] body {
-    @apply text-mint-soft;
-    background-color: #1c2826;
-    background-image: radial-gradient(#2a3a37 0.5px, transparent 0.5px);
-  }
-  [data-theme="carbon"] .card-panel {
-    background-color: #243531;
-    border-color: #33403c;
   }
 }
 
@@ -42,7 +83,7 @@
 
   .field-input {
     @apply w-full rounded-xl border border-line bg-paper px-3 py-2.5 text-ink outline-none
-      transition focus:border-mint focus:bg-white focus:ring-2 focus:ring-mint-soft;
+      transition focus:border-mint focus:bg-card focus:ring-2 focus:ring-mint-soft;
   }
 
   .card-panel {

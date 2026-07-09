@@ -16,6 +16,7 @@ A "goal" entry carries the month's savings goal and has no category.
 import uuid
 from datetime import UTC, datetime
 
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
 
 CATEGORY_KINDS = ("income", "fixed", "variable")
@@ -32,6 +33,8 @@ def utcnow() -> datetime:
 
 class Category(SQLModel, table=True):
     __tablename__ = "category"
+    # Sync pulls filter by user AND updated_at; see migration f5a6b7c8d9e0.
+    __table_args__ = (Index("ix_category_user_updated", "user_id", "updated_at"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
@@ -55,6 +58,8 @@ class Category(SQLModel, table=True):
 
 class Entry(SQLModel, table=True):
     __tablename__ = "entry"
+    # Sync pulls filter by user AND updated_at; see migration f5a6b7c8d9e0.
+    __table_args__ = (Index("ix_entry_user_updated", "user_id", "updated_at"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", index=True)

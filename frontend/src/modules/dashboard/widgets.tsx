@@ -44,8 +44,10 @@ export interface WidgetDef {
 
 function HeroWidget({ year, calc }: WidgetProps) {
   const rate = savingsRatePct(calc);
+  // Deliberately fixed dark hexes (not theme tokens): this hero card is a
+  // dark accent in every theme, and `ink` flips to near-white in oscuro.
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-ink to-[#243531] p-6 text-white">
+    <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1C2826] to-[#243531] p-6 text-white">
       <div className="flex items-start justify-between gap-3">
         <span className="text-xs font-semibold uppercase tracking-wide text-white/60">
           Ahorro del año · {year}

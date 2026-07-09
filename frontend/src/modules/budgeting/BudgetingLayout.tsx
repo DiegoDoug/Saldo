@@ -1,12 +1,9 @@
 /** App shell for the budgeting views: sticky header (brand, year switch,
  * logout) and a bottom nav, with the active view rendered via <Outlet />. */
 
-import { ChevronLeft, ChevronRight, LogOut, PiggyBank } from "lucide-react";
-import { useEffect } from "react";
+import { ChevronLeft, ChevronRight, PiggyBank, UserCircle2 } from "lucide-react";
 import { Link, Outlet } from "react-router-dom";
 
-import { useLayout } from "../dashboard/layoutRepo";
-import { useLogout } from "../identity/hooks";
 import { PwaUpdatePrompt } from "../sync/PwaUpdatePrompt";
 import { SyncStatusBar } from "../sync/SyncStatusBar";
 import { AppNav } from "./AppNav";
@@ -15,13 +12,6 @@ import { useBudgetingUi } from "./uiStore";
 export function BudgetingLayout() {
   const year = useBudgetingUi((s) => s.currentYear);
   const stepYear = useBudgetingUi((s) => s.stepYear);
-  const logout = useLogout();
-  const theme = useLayout().theme;
-
-  // Apply the user's theme app-wide via a data attribute (see index.css).
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
 
   return (
     <div className="min-h-screen pb-20">
@@ -58,13 +48,13 @@ export function BudgetingLayout() {
             </button>
           </div>
 
-          <button
-            className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-card text-ink-soft hover:text-coral"
-            onClick={logout}
-            aria-label="Salir"
+          <Link
+            to="/profile"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-card text-ink-soft hover:text-mint"
+            aria-label="Perfil"
           >
-            <LogOut size={16} />
-          </button>
+            <UserCircle2 size={18} />
+          </Link>
         </div>
       </header>
 

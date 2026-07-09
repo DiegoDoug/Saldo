@@ -234,6 +234,22 @@ function countConflicts(
   return conflicts;
 }
 
+/**
+ * Purge records the server rejected as belonging to another account. They are
+ * stale leftovers (e.g. from an interrupted account switch); keeping them
+ * would re-push them on every pass without ever succeeding.
+ */
+async function purgeRejected(ids: string[] = []): Promise<void> {
+  if (ids.length === 0) return;
+  console.warn("Purging records rejected by the server (foreign owner)", ids);
+  await db.transaction("rw", db.tables, async () => {
+    for (const table of db.tables) {
+      if (table.name === "meta" || table.name === "profile" || table.name === "layout") continue;
+      await table.bulkDelete(ids);
+    }
+  });
+}
+
 let inflight: Promise<boolean> | null = null;
 
 /**
@@ -323,6 +339,7 @@ async function doSync(): Promise<boolean> {
         countConflicts(dirtyEntries, pushed.entries) +
         countConflicts(dirtyTags, pushed.tags ?? []);
       if (conflicts > 0) store.addConflicts(conflicts);
+      await purgeRejected(pushed.rejected_ids);
       await mergeAccounts(pushed.accounts);
       await mergeMerchants(pushed.merchants);
       await mergeRules(pushed.recurring_rules);

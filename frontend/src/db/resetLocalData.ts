@@ -20,11 +20,40 @@ interface Profile {
   defaultCurrency: string;
 }
 
-export async function adoptLocalProfile(session: Profile): Promise<void> {
-  const existing = await db.profile.toCollection().first();
-  if (existing && existing.id !== session.id) {
-    await db.transaction("rw", db.tables, () => Promise.all(db.tables.map((table) => table.clear())));
-    queryClient.clear();
+async function wipeAllTables(): Promise<void> {
+  await db.transaction("rw", db.tables, () =>
+    Promise.all(db.tables.map((table) => table.clear())),
+  );
+  queryClient.clear();
+}
+
+/** True when any table besides `profile` holds rows. */
+async function hasLocalData(): Promise<boolean> {
+  for (const table of db.tables) {
+    if (table.name === "profile") continue;
+    if ((await table.count()) > 0) return true;
   }
-  await db.profile.put(session);
+  return false;
+}
+
+export async function adoptLocalProfile(session: Profile): Promise<void> {
+  try {
+    const existing = await db.profile.toCollection().first();
+    // Wipe when the device's data belongs to a different account -- and also
+    // when there is data but no profile row at all (older app versions never
+    // wrote one, so its absence proves nothing about who the data belongs to).
+    if (existing ? existing.id !== session.id : await hasLocalData()) {
+      await wipeAllTables();
+    }
+    await db.profile.put(session);
+  } catch (err) {
+    // A failed adoption must never leave another account's data adoptable by
+    // this session: fall back to deleting the whole database. If even that
+    // fails (IndexedDB unavailable), rethrow -- logging in would leak data.
+    console.error("Local profile adoption failed; resetting local database", err);
+    await db.delete();
+    await db.open();
+    queryClient.clear();
+    await db.profile.put(session);
+  }
 }

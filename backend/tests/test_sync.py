@@ -137,11 +137,14 @@ async def test_push_cannot_overwrite_another_users_record(client: AsyncClient) -
     eid = str(uuid.uuid4())
     await push_entry(client, ana, entry_id=eid, amount=1000, updated_at="2026-01-01T10:00:00")
 
-    # Beto pushing the same id (Ana's) is refused.
+    # Beto pushing the same id (Ana's) is skipped and reported, never applied.
     resp = await push_entry(
         client, beto, entry_id=eid, amount=9999, updated_at="2026-01-02T10:00:00"
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["rejected_ids"] == [eid]
+    assert body["entries"] == []
 
     # Ana's record is unchanged.
     ana_entry = await client.get("/budgeting/entries?year=2026&month=0", headers=ana)

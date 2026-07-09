@@ -139,3 +139,58 @@ async def test_reset_password_with_bad_token_is_rejected(client: AsyncClient) ->
         json={"token": "not-a-real-token", "password": "whatever-passphrase"},
     )
     assert resp.status_code == 400
+
+
+async def test_email_is_normalized_on_register_and_login(client: AsyncClient) -> None:
+    body = await register(client, "  Ana@Example.COM ", "s3cret-passphrase")
+    assert body["email"] == "ana@example.com"
+
+    # A differently-cased login resolves to the same account...
+    token = await login(client, "ANA@example.com", "s3cret-passphrase")
+    me = await client.get("/users/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.json()["email"] == "ana@example.com"
+
+    # ...and a differently-cased re-register is a duplicate, not a new account.
+    dup = await client.post(
+        "/auth/register",
+        json={"email": "ana@EXAMPLE.com", "password": "another-passphrase"},
+    )
+    assert dup.status_code == 400
+
+
+async def test_change_password_requires_current_password(client: AsyncClient) -> None:
+    await register(client, "ana@example.com", "old-passphrase")
+    token = await login(client, "ana@example.com", "old-passphrase")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Wrong current password is rejected and nothing changes.
+    bad = await client.post(
+        "/users/me/change-password",
+        json={"current_password": "not-my-password", "new_password": "new-passphrase-9"},
+        headers=headers,
+    )
+    assert bad.status_code == 400
+    assert bad.json()["detail"] == "CURRENT_PASSWORD_INCORRECT"
+    assert await login(client, "ana@example.com", "old-passphrase")
+
+    # Correct current password applies the change.
+    ok = await client.post(
+        "/users/me/change-password",
+        json={"current_password": "old-passphrase", "new_password": "new-passphrase-9"},
+        headers=headers,
+    )
+    assert ok.status_code == 204
+    stale = await client.post(
+        "/auth/jwt/login",
+        data={"username": "ana@example.com", "password": "old-passphrase"},
+    )
+    assert stale.status_code == 400
+    assert await login(client, "ana@example.com", "new-passphrase-9")
+
+
+async def test_change_password_requires_authentication(client: AsyncClient) -> None:
+    resp = await client.post(
+        "/users/me/change-password",
+        json={"current_password": "x", "new_password": "y-passphrase-123"},
+    )
+    assert resp.status_code == 401

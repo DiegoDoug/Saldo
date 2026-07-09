@@ -22,6 +22,8 @@ interface SyncResponse {
   categories: WireCategory[];
   entries: WireEntry[];
   tags?: WireTag[];
+  /** Push only: ids the server refused because they belong to another user. */
+  rejected_ids?: string[];
   server_time: string;
 }
 

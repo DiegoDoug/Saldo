@@ -13,6 +13,7 @@ import uuid
 from datetime import date as date_type
 from datetime import datetime
 
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
 
 from app.modules.budgeting.models import utcnow
@@ -23,6 +24,8 @@ LIABILITY_KINDS = ("mortgage", "loan", "credit_card", "student", "other")
 
 class Asset(SQLModel, table=True):
     __tablename__ = "asset"
+    # Sync pulls filter by user AND updated_at; see migration f5a6b7c8d9e0.
+    __table_args__ = (Index("ix_asset_user_updated", "user_id", "updated_at"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
@@ -39,6 +42,8 @@ class Asset(SQLModel, table=True):
 
 class Liability(SQLModel, table=True):
     __tablename__ = "liability"
+    # Sync pulls filter by user AND updated_at; see migration f5a6b7c8d9e0.
+    __table_args__ = (Index("ix_liability_user_updated", "user_id", "updated_at"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
@@ -56,6 +61,8 @@ class Liability(SQLModel, table=True):
 
 class NetWorthSnapshot(SQLModel, table=True):
     __tablename__ = "net_worth_snapshot"
+    # Sync pulls filter by user AND updated_at; see migration f5a6b7c8d9e0.
+    __table_args__ = (Index("ix_net_worth_snapshot_user_updated", "user_id", "updated_at"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", index=True)

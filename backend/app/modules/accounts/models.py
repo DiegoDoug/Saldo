@@ -13,6 +13,7 @@ derived by folding signed transactions on top of it (see the accounts service).
 import uuid
 from datetime import datetime
 
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
 
 from app.modules.budgeting.models import utcnow
@@ -31,6 +32,8 @@ ACCOUNT_TYPES = (
 
 class Account(SQLModel, table=True):
     __tablename__ = "account"
+    # Sync pulls filter by user AND updated_at; see migration f5a6b7c8d9e0.
+    __table_args__ = (Index("ix_account_user_updated", "user_id", "updated_at"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", index=True)

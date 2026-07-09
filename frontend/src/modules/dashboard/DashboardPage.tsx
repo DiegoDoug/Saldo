@@ -33,7 +33,8 @@ import { useYearResult } from "../budgeting/hooks";
 import { isYearEmpty } from "../budgeting/summary";
 import { useBudgetingUi } from "../budgeting/uiStore";
 import { runLayoutSync } from "./layoutSync";
-import { THEMES, saveLayout, useLayout } from "./layoutRepo";
+import { saveLayout, useLayout } from "./layoutRepo";
+import { ThemePicker } from "./ThemePicker";
 import { WIDGET_BY_ID } from "./widgets";
 
 export function DashboardPage() {
@@ -137,20 +138,10 @@ function EditPanel({
     <div className="flex flex-col gap-4">
       <section className="card-panel">
         <h2 className="mb-1 font-display font-semibold">Tema</h2>
-        <p className="mb-3 text-sm text-ink-soft">Elige el aspecto de tu panel.</p>
-        <div className="flex flex-wrap gap-2">
-          {THEMES.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => onChange({ ...layout, theme: t.id })}
-              className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
-                layout.theme === t.id ? "border-mint bg-mint-soft text-mint" : "border-line bg-paper"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <p className="mb-3 text-sm text-ink-soft">
+          Elige el aspecto de la aplicación: claro, medio u oscuro.
+        </p>
+        <ThemePicker value={layout.theme} onSelect={(theme) => onChange({ ...layout, theme })} />
       </section>
 
       <section className="card-panel">

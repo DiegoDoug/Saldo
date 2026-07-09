@@ -5,13 +5,26 @@ mounts feature-module routers. All real logic lives in `app/modules/*` and the
 framework-free domain core in `app/shared/domain/`.
 """
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 
+logger = logging.getLogger("saldo")
+
 
 def create_app() -> FastAPI:
+    if settings.jwt_secret == "change-me-in-production":
+        # Anyone who reads the repo can forge tokens against this secret; make
+        # the misconfiguration impossible to miss without breaking local dev.
+        logger.warning(
+            "SALDO_JWT_SECRET is still the default value. Set a real secret "
+            "before exposing this server: "
+            'python -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+
     app = FastAPI(
         title="Saldo API",
         version="0.1.0",
@@ -36,6 +49,7 @@ def create_app() -> FastAPI:
 
     # --- Identity (auth) ------------------------------------------------
     from app.modules.identity.router import (
+        account_router,
         auth_router,
         register_router,
         reset_password_router,
@@ -45,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/auth/jwt", tags=["auth"])
     app.include_router(register_router, prefix="/auth", tags=["auth"])
     app.include_router(reset_password_router, prefix="/auth", tags=["auth"])
+    app.include_router(account_router, prefix="/users", tags=["users"])
     app.include_router(users_router, prefix="/users", tags=["users"])
 
     # --- Budgeting ------------------------------------------------------
