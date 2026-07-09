@@ -197,6 +197,10 @@ class PushResponse(BaseModel):
     categories: list[CategoryRead]
     entries: list[EntryRead]
     tags: list[TagRead] = []
+    # Ids the server refused to apply because they belong to another user.
+    # The client should drop these records locally — they are stale leftovers
+    # from a different account, and retrying them would never succeed.
+    rejected_ids: list[uuid.UUID] = []
     server_time: datetime
 
 

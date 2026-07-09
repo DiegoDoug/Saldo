@@ -8,7 +8,15 @@ import { useMutation } from "@tanstack/react-query";
 
 import { adoptLocalProfile } from "../../db/resetLocalData";
 import { queryClient } from "../../shared/queryClient";
-import { fetchMe, forgotPassword, login, register, resetPassword } from "./api";
+import {
+  changePassword,
+  fetchMe,
+  forgotPassword,
+  login,
+  register,
+  resetPassword,
+  updateMe,
+} from "./api";
 import { useAuthStore } from "./authStore";
 
 interface Credentials {
@@ -81,4 +89,28 @@ export function useLogout() {
     useAuthStore.getState().clear();
     queryClient.clear();
   };
+}
+
+/** Update the account's default currency and keep the session copy in sync. */
+export function useUpdateCurrency() {
+  return useMutation({
+    mutationFn: async (currency: string) => {
+      const user = await updateMe({ default_currency: currency.trim().toUpperCase() });
+      useAuthStore.getState().setUser(user);
+      return user;
+    },
+  });
+}
+
+/** Change the password; the backend verifies the current one server-side. */
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: ({
+      currentPassword,
+      newPassword,
+    }: {
+      currentPassword: string;
+      newPassword: string;
+    }) => changePassword(currentPassword, newPassword),
+  });
 }

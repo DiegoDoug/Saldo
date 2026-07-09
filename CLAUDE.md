@@ -55,7 +55,7 @@ Dexie (IndexedDB) is the on-device source of truth; every UI write lands there f
 - **Conflict resolution is last-write-wins on `updated_at`** on both sides (`frontend/src/modules/sync/syncEngine.ts` and `backend/app/modules/sync/router.py`). No CRDTs.
 - **Timestamp gotcha:** the backend emits naive-UTC ISO (no `Z`); the client writes `toISOString()` (with `Z`). Always compare via `toEpoch()`, which normalizes a missing zone to UTC. Never compare these timestamps as strings.
 - Pull includes tombstones (`deleted` rows) so clients can drop locally-deleted records. Dexie can't index booleans, so `deleted` is stored as `0 | 1`.
-- Push is idempotent and refuses ids owned by another user (403).
+- Push is idempotent. Ids owned by another user are never applied: they're skipped and reported back in `rejected_ids` so the client can purge them locally (a hard failure would poison the whole batch and permanently brick that device's sync).
 
 ### Security boundary
 

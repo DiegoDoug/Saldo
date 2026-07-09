@@ -24,9 +24,27 @@ logger = logging.getLogger("saldo.identity")
 password_helper = PasswordHelper(PasswordHash((Argon2Hasher(),)))
 
 
+def normalize_email(email: str) -> str:
+    """Trim + lowercase, so "Ana@Mail.com " and "ana@mail.com" are one account.
+
+    Enforced here (not just in a client) because the server owns the email
+    uniqueness constraint — any client that skips normalization would otherwise
+    mint a duplicate account the user can't tell apart from their real one.
+    """
+    return email.strip().lower()
+
+
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     reset_password_token_secret = settings.jwt_secret
     verification_token_secret = settings.jwt_secret
+
+    async def create(self, user_create, safe: bool = False, request: Request | None = None):
+        user_create.email = normalize_email(user_create.email)
+        return await super().create(user_create, safe=safe, request=request)
+
+    async def get_by_email(self, user_email: str) -> User:
+        # Login and forgot-password resolve accounts through this lookup.
+        return await super().get_by_email(normalize_email(user_email))
 
     async def on_after_forgot_password(
         self, user: User, token: str, request: Request | None = None
