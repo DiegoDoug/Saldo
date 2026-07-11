@@ -34,6 +34,9 @@ class DraftMovement(BaseModel):
     currency: str | None = None
     account_id: uuid.UUID | None = None
     account_ref: str | None = None
+    # For a transfer only: the destination account (the money's other leg).
+    transfer_account_id: uuid.UUID | None = None
+    transfer_account_ref: str | None = None
     category_id: uuid.UUID | None = None
     category_ref: str | None = None
     merchant_id: uuid.UUID | None = None

@@ -187,6 +187,40 @@ async def test_hallucinated_id_is_demoted_to_proposal(client: AsyncClient, monke
     assert mv["account_ref"] == "Inventada"
 
 
+async def test_transfer_carries_both_legs(client: AsyncClient, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "deepseek_api_key", "test-key")
+    h = await auth_headers(client, "ana@example.com", "passphrase-1")
+    origin = (
+        await client.post("/accounts", json={"name": "Origen", "type": "checking"}, headers=h)
+    ).json()
+
+    app.dependency_overrides[get_bank_ai_provider] = lambda: FakeBankProvider(
+        raw=RawBankExtraction(
+            movements=[
+                RawMovement(
+                    date="2026-06-10",
+                    description="TRASPASO A AHORRO",
+                    type="transfer",
+                    amount=200.0,
+                    account_id=origin["id"],
+                    transfer_account_name="Ahorro",
+                    confidence=0.9,
+                )
+            ],
+            new_accounts=[ProposedEntity(name="Ahorro", kind="savings")],
+        )
+    )
+    resp = await upload(client, h)
+    draft = (await client.get(f"/bank-imports/{resp.json()['id']}", headers=h)).json()["draft"]
+    mv = draft["movements"][0]
+    assert mv["type"] == "transfer"
+    assert mv["account_id"] == origin["id"]
+    assert mv["transfer_account_id"] is None
+    assert mv["transfer_account_ref"] == "Ahorro"
+    # The destination account is proposed for creation alongside the source.
+    assert "Ahorro" in {a["name"] for a in draft["new_accounts"]}
+
+
 async def test_duplicate_upload_detected(client: AsyncClient, monkeypatch) -> None:
     monkeypatch.setattr(settings, "deepseek_api_key", "test-key")
     h = await auth_headers(client, "ana@example.com", "passphrase-1")

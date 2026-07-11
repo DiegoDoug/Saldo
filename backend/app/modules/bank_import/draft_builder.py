@@ -25,12 +25,13 @@ def build(raw: RawBankExtraction, context: BankExtractionContext) -> DraftBankAn
         _reconcile(m, known_accounts, known_categories, known_merchants) for m in raw.movements
     ]
     existing_tags = {t.name.casefold() for t in context.tags}
+    account_refs = [m.account_ref for m in movements] + [m.transfer_account_ref for m in movements]
 
     return DraftBankAnalysis(
         bank_name=raw.bank_name,
         currency=raw.currency or context.default_currency,
         movements=movements,
-        new_accounts=_dedupe(m.account_ref for m in movements),
+        new_accounts=_dedupe(account_refs),
         new_categories=_categories_from(movements, raw),
         new_merchants=_dedupe(m.merchant_ref for m in movements),
         new_tags=_new_tags(movements, existing_tags),
@@ -46,6 +47,7 @@ def _reconcile(
     merchants: set[uuid.UUID],
 ) -> DraftMovement:
     account_id = m.account_id if m.account_id in accounts else None
+    transfer_account_id = m.transfer_account_id if m.transfer_account_id in accounts else None
     category_id = m.category_id if m.category_id in categories else None
     merchant_id = m.merchant_id if m.merchant_id in merchants else None
     return DraftMovement(
@@ -56,6 +58,8 @@ def _reconcile(
         currency=m.currency,
         account_id=account_id,
         account_ref=None if account_id else (m.account_name or None),
+        transfer_account_id=transfer_account_id,
+        transfer_account_ref=None if transfer_account_id else (m.transfer_account_name or None),
         category_id=category_id,
         category_ref=None if category_id else (m.category_name or None),
         merchant_id=merchant_id,

@@ -64,6 +64,9 @@ class RawMovement(BaseModel):
     currency: str | None = None
     account_id: uuid.UUID | None = None  # existing account this row belongs to
     account_name: str | None = None  # else a proposed account name
+    # For a transfer only: the *other* account the money moves to/from.
+    transfer_account_id: uuid.UUID | None = None
+    transfer_account_name: str | None = None
     category_id: uuid.UUID | None = None
     category_name: str | None = None  # proposed new category, only if no id
     merchant_id: uuid.UUID | None = None

@@ -44,8 +44,12 @@ function MovementRow({
   included: boolean;
   onToggle: () => void;
 }) {
+  const isTransfer = movement.type === "transfer";
   const signed = movement.type === "income" ? movement.amount ?? 0 : -(movement.amount ?? 0);
-  const label = movement.categoryRef ?? movement.merchantRef ?? movement.description ?? "";
+  const transferTo = movement.transferAccountRef ?? "otra cuenta";
+  const label = isTransfer
+    ? `transferencia → ${transferTo}`
+    : movement.categoryRef ?? movement.merchantRef ?? movement.description ?? "";
   return (
     <li className={`flex items-center gap-3 py-2 ${included ? "" : "opacity-40"}`}>
       <input
@@ -64,9 +68,9 @@ function MovementRow({
         </p>
       </div>
       <span
-        className={`shrink-0 tabular-nums text-sm font-semibold ${signed < 0 ? "text-ink" : "text-mint"}`}
+        className={`shrink-0 tabular-nums text-sm font-semibold ${isTransfer || signed < 0 ? "text-ink" : "text-mint"}`}
       >
-        {formatMoney(signed, movement.currency ?? "EUR")}
+        {formatMoney(isTransfer ? movement.amount ?? 0 : signed, movement.currency ?? "EUR")}
       </span>
     </li>
   );
@@ -100,7 +104,10 @@ export function BankReviewForm({
     [draft.movements, excluded],
   );
   const account = accounts.find((a) => a.id === accountId);
-  const nonTransfers = included.filter((m) => m.type !== "transfer").length;
+  // Rows we can actually write: any included movement with a positive amount.
+  // (A transfer still needs a resolvable second account at confirm time; that
+  // is enforced in `confirmDraft`, which returns the real count written.)
+  const importable = included.filter((m) => (m.amount ?? 0) > 0).length;
 
   function toggle(index: number) {
     setExcluded((prev) => {
@@ -112,7 +119,7 @@ export function BankReviewForm({
   }
 
   async function onConfirm() {
-    if (!accountId || nonTransfers === 0) return;
+    if (!accountId || importable === 0) return;
     setSubmitting(true);
     try {
       const { transactionCount } = await confirmDraft(
@@ -186,11 +193,11 @@ export function BankReviewForm({
         </button>
         <button
           type="button"
-          disabled={!accountId || nonTransfers === 0 || submitting}
+          disabled={!accountId || importable === 0 || submitting}
           className="btn-primary disabled:opacity-40"
           onClick={onConfirm}
         >
-          {submitting ? "Guardando…" : `Importar ${nonTransfers} movimientos`}
+          {submitting ? "Guardando…" : `Importar ${importable} movimientos`}
         </button>
       </div>
     </div>

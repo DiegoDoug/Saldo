@@ -36,6 +36,8 @@ Schema:
     "currency": string | null,
     "account_id": string | null,         // an existing account id, if this row belongs to one
     "account_name": string | null,       // else a proposed account name
+    "transfer_account_id": string | null,   // transfers only: the OTHER account, if it exists
+    "transfer_account_name": string | null, // transfers only: else the other account's new name
     "category_id": string | null,        // an existing category id, if a good match exists
     "category_name": string | null,      // a short new-category suggestion, only if no id matches
     "merchant_id": string | null,        // an existing merchant id, if the concept is a known one
@@ -57,7 +59,10 @@ Schema:
 Rules:
 - Convert every amount to a positive number and set "type" from its sign \
 (money leaving the account -> "expense", money arriving -> "income"). Movements \
-between two of the user's own accounts are "transfer".
+between two of the user's own accounts are "transfer": put the account the \
+money leaves in "account_id"/"account_name" and the account it arrives in in \
+"transfer_account_id"/"transfer_account_name", and report the transfer only \
+once rather than as two mirrored rows.
 - Prefer matching a row to an existing account/category/merchant by returning \
 its id over inventing a new one. Only populate the *_name fields (and the \
 new_* arrays) for entities that genuinely don't exist yet.

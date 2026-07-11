@@ -11,19 +11,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DraftBankAnalysis, DraftMovement } from "./api";
 import { confirmDraft } from "./confirmImport";
 
-const { addAccount, addCategory, addMerchant, ensureTags, addTransaction } = vi.hoisted(() => ({
-  addAccount: vi.fn(),
-  addCategory: vi.fn(),
-  addMerchant: vi.fn(),
-  ensureTags: vi.fn(),
-  addTransaction: vi.fn(),
-}));
+const { addAccount, addCategory, addMerchant, ensureTags, addTransaction, addTransfer } =
+  vi.hoisted(() => ({
+    addAccount: vi.fn(),
+    addCategory: vi.fn(),
+    addMerchant: vi.fn(),
+    ensureTags: vi.fn(),
+    addTransaction: vi.fn(),
+    addTransfer: vi.fn(),
+  }));
 
 vi.mock("../accounts/localRepo", () => ({ addAccount }));
 vi.mock("../budgeting/localRepo", () => ({ addCategory }));
 vi.mock("../merchants/localRepo", () => ({ addMerchant }));
 vi.mock("../tags/localRepo", () => ({ ensureTags }));
-vi.mock("../transactions/localRepo", () => ({ addTransaction }));
+vi.mock("../transactions/localRepo", () => ({ addTransaction, addTransfer }));
 
 function movement(overrides: Partial<DraftMovement> = {}): DraftMovement {
   return {
@@ -34,6 +36,8 @@ function movement(overrides: Partial<DraftMovement> = {}): DraftMovement {
     currency: "EUR",
     accountId: null,
     accountRef: null,
+    transferAccountId: null,
+    transferAccountRef: null,
     categoryId: null,
     categoryRef: null,
     merchantId: null,
@@ -67,6 +71,7 @@ beforeEach(() => {
   addMerchant.mockReset().mockResolvedValue("new-merch");
   ensureTags.mockReset().mockResolvedValue(undefined);
   addTransaction.mockReset().mockResolvedValue("tx");
+  addTransfer.mockReset().mockResolvedValue("tx");
 });
 
 describe("confirmDraft", () => {
@@ -122,15 +127,42 @@ describe("confirmDraft", () => {
     expect(addTransaction).toHaveBeenCalledTimes(2);
   });
 
-  it("skips transfers and non-positive amounts", async () => {
-    const movements = [
-      movement({ type: "transfer" }),
-      movement({ amount: 0 }),
-      movement({ amount: null }),
-      movement({ amount: 5 }),
-    ];
+  it("skips non-positive amounts", async () => {
+    const movements = [movement({ amount: 0 }), movement({ amount: null }), movement({ amount: 5 })];
     const result = await confirmDraft(draft(), movements, "default-acc", "EUR");
     expect(addTransaction).toHaveBeenCalledTimes(1);
     expect(result.transactionCount).toBe(1);
+  });
+
+  it("writes a transfer with both legs, resolving the destination account", async () => {
+    const d = draft({
+      newAccounts: [
+        { name: "Origen", kind: "checking" },
+        { name: "Ahorro", kind: "savings" },
+      ],
+    });
+    const m = movement({
+      type: "transfer",
+      amount: 200,
+      accountRef: "Origen",
+      transferAccountRef: "Ahorro",
+    });
+    addAccount.mockReset();
+    addAccount.mockResolvedValueOnce("id-origen").mockResolvedValueOnce("id-ahorro");
+
+    const result = await confirmDraft(d, [m], "default-acc", "EUR");
+
+    expect(addTransfer).toHaveBeenCalledWith(
+      expect.objectContaining({ fromAccountId: "id-origen", toAccountId: "id-ahorro", amount: 200 }),
+    );
+    expect(addTransaction).not.toHaveBeenCalled();
+    expect(result.transactionCount).toBe(1);
+  });
+
+  it("skips a transfer that can't resolve two distinct accounts", async () => {
+    const m = movement({ type: "transfer", amount: 50, transferAccountRef: null });
+    const result = await confirmDraft(draft(), [m], "default-acc", "EUR");
+    expect(addTransfer).not.toHaveBeenCalled();
+    expect(result.transactionCount).toBe(0);
   });
 });

@@ -12,13 +12,19 @@
  * each `movimiento` can point at a real id. A movement with no resolvable
  * account falls back to `defaultAccountId` — the review form guarantees one is
  * selected before confirm is enabled.
+ *
+ * Transfers are written with `addTransfer` (source -> destination account).
+ * Both legs are resolved the same id-or-name way; a transfer whose two accounts
+ * can't be resolved to two *distinct* accounts is skipped rather than written as
+ * a malformed row (the destination is the AI's `transfer_account_*`, the source
+ * falls back to the default account like any other movement).
  */
 
 import { addAccount } from "../accounts/localRepo";
 import { addCategory } from "../budgeting/localRepo";
 import { addMerchant } from "../merchants/localRepo";
 import { ensureTags } from "../tags/localRepo";
-import { addTransaction } from "../transactions/localRepo";
+import { addTransaction, addTransfer } from "../transactions/localRepo";
 import type { AccountType } from "../../db/db";
 import type { DraftBankAnalysis, DraftMovement, ProposedEntity } from "./api";
 
@@ -81,20 +87,34 @@ export async function confirmDraft(
 
   let count = 0;
   for (const m of movements) {
-    if (m.type === "transfer") continue; // transfers need a second account we don't model here
+    if (!m.amount || m.amount <= 0) continue;
     const accountId = resolve(m.accountId, m.accountRef, accountIds) ?? defaultAccountId;
-    if (!accountId || !m.amount || m.amount <= 0) continue;
-    await addTransaction({
-      type: m.type,
-      amount: m.amount,
-      currency,
-      accountId,
-      categoryId: resolve(m.categoryId, m.categoryRef, categoryIds),
-      merchantId: resolve(m.merchantId, m.merchantRef, merchantIds),
-      date: m.date ?? undefined,
-      notes: m.notes ?? m.description ?? "",
-      tags: m.tags,
-    });
+    if (!accountId) continue;
+
+    if (m.type === "transfer") {
+      const toAccountId = resolve(m.transferAccountId, m.transferAccountRef, accountIds);
+      if (!toAccountId || toAccountId === accountId) continue; // needs two distinct accounts
+      await addTransfer({
+        amount: m.amount,
+        currency,
+        fromAccountId: accountId,
+        toAccountId,
+        date: m.date ?? undefined,
+        notes: m.notes ?? m.description ?? "",
+      });
+    } else {
+      await addTransaction({
+        type: m.type,
+        amount: m.amount,
+        currency,
+        accountId,
+        categoryId: resolve(m.categoryId, m.categoryRef, categoryIds),
+        merchantId: resolve(m.merchantId, m.merchantRef, merchantIds),
+        date: m.date ?? undefined,
+        notes: m.notes ?? m.description ?? "",
+        tags: m.tags,
+      });
+    }
     count += 1;
   }
   return { transactionCount: count };

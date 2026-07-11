@@ -30,6 +30,8 @@ export interface DraftMovement {
   currency: string | null;
   accountId: string | null;
   accountRef: string | null;
+  transferAccountId: string | null;
+  transferAccountRef: string | null;
   categoryId: string | null;
   categoryRef: string | null;
   merchantId: string | null;
@@ -81,6 +83,8 @@ interface RawMovement {
   currency: string | null;
   account_id: string | null;
   account_ref: string | null;
+  transfer_account_id: string | null;
+  transfer_account_ref: string | null;
   category_id: string | null;
   category_ref: string | null;
   merchant_id: string | null;
@@ -123,6 +127,8 @@ function toMovement(raw: RawMovement): DraftMovement {
     currency: raw.currency,
     accountId: raw.account_id,
     accountRef: raw.account_ref,
+    transferAccountId: raw.transfer_account_id,
+    transferAccountRef: raw.transfer_account_ref,
     categoryId: raw.category_id,
     categoryRef: raw.category_ref,
     merchantId: raw.merchant_id,
@@ -143,6 +149,8 @@ function toMovementPayload(m: DraftMovement): RawMovement {
     currency: m.currency,
     account_id: m.accountId,
     account_ref: m.accountRef,
+    transfer_account_id: m.transferAccountId,
+    transfer_account_ref: m.transferAccountRef,
     category_id: m.categoryId,
     category_ref: m.categoryRef,
     merchant_id: m.merchantId,
