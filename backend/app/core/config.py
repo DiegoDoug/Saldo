@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     receipt_storage_dir: str = "./data/receipts"
     receipt_max_upload_mb: int = 10
 
+    # --- Bank import (AI bank-statement-to-transactions pipeline) -------
+    # Uploaded CSV/Markdown statements are stored content-addressed on local
+    # disk; the drafts they produce are server-only state, never synced to
+    # Dexie (same posture as receipt import). Reuses the same DeepSeek
+    # provider config below — leaving `deepseek_api_key` blank disables both.
+    bank_storage_dir: str = "./data/bank_imports"
+    bank_max_upload_mb: int = 10
+
     # Tesseract language packs to run, "+"-joined (see Dockerfile). Spanish +
     # English cover this app's primary audience by default.
     ocr_languages: str = "spa+eng"
