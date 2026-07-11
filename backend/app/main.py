@@ -127,6 +127,11 @@ def create_app() -> FastAPI:
 
     app.include_router(receipt_import_router)
 
+    # --- Bank import (AI bank-statement-to-transactions pipeline) -------
+    from app.modules.bank_import.router import router as bank_import_router
+
+    app.include_router(bank_import_router)
+
     return app
 
 
