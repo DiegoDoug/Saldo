@@ -165,4 +165,25 @@ describe("confirmDraft", () => {
     expect(addTransfer).not.toHaveBeenCalled();
     expect(result.transactionCount).toBe(0);
   });
+
+  it("writes a transfer to an existing destination account by id", async () => {
+    const m = movement({
+      type: "transfer",
+      amount: 75,
+      accountId: "acc-from",
+      transferAccountId: "acc-to",
+    });
+    await confirmDraft(draft(), [m], "default-acc", "EUR");
+    expect(addTransfer).toHaveBeenCalledWith(
+      expect.objectContaining({ fromAccountId: "acc-from", toAccountId: "acc-to", amount: 75 }),
+    );
+  });
+
+  it("only creates entities the imported movements actually reference", async () => {
+    // The draft proposes a merchant, but no imported movement references it —
+    // so it must not be created (no orphan rows from dropped movements).
+    const d = draft({ newMerchants: [{ name: "Fantasma", kind: null }] });
+    await confirmDraft(d, [movement()], "default-acc", "EUR");
+    expect(addMerchant).not.toHaveBeenCalled();
+  });
 });
